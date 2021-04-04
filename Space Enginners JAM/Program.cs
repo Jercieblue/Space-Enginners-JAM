@@ -1,21 +1,9 @@
-﻿using Sandbox.Game.EntityComponents;
-using Sandbox.ModAPI.Ingame;
-using Sandbox.ModAPI.Interfaces;
-using SpaceEngineers.Game.ModAPI.Ingame;
+﻿using Sandbox.ModAPI.Ingame;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
 using VRage;
-using VRage.Collections;
-using VRage.Game;
-using VRage.Game.Components;
 using VRage.Game.GUI.TextPanel;
-using VRage.Game.ModAPI.Ingame;
-using VRage.Game.ModAPI.Ingame.Utilities;
-using VRage.Game.ObjectBuilders.Definitions;
 using VRageMath;
 
 namespace IngameScript {
@@ -224,59 +212,40 @@ namespace IngameScript {
                     }
                 }
 
-                public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyShipConnector connector) {
-                    Quaternion quat = Quaternion.CreateFromForwardUp(connector.WorldMatrix.Forward, connector.WorldMatrix.Up);
-                    quat.Conjugate();
+                public void ApplyGyro(Vector3 values) {
+                    gyro.Pitch = -values.X;
+                    gyro.Yaw = -values.Y;
+                    gyro.Roll = -values.Z;
+                }
+
+                public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyTerminalBlock block) {
+                    Quaternion quat = Quaternion.Conjugate(Quaternion.CreateFromForwardUp(block.WorldMatrix.Forward, block.WorldMatrix.Up));
                     Vector3D up = Vector3D.Normalize(quat * ws_up);
                     Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, quat * ws_fwd));
                     Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
-                    float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
                     Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
-                    Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
-                        connector.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-
-                    gyro.Pitch = -(float)final.X;
-                    gyro.Yaw = -(float)final.Y;
-                    gyro.Roll = -(float)final.Z;
+                    float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
+                    Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right), block.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+                    ApplyGyro(-final);
                 }
 
                 public void LookAt(Vector3D target, IMyGyro gyro, IMyRemoteControl control) {
                     Vector3D offet = (target - control.GetPosition());
                     if (offet.Length() < 10.0f) {
-                        gyro.Pitch = 0.0f;
-                        gyro.Yaw = 0.0f;
-                        gyro.Roll = 0.0f;
+                        ApplyGyro(Vector3.Zero);
                         return;
                     }
-
                     Vector3 direction = Vector3D.Normalize(offet);
-                    Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
-                    quat.Conjugate();
-                    direction = quat * direction;
-
                     if (spaceship.AtmosphericThrustersOnline && spaceship.gravity.LengthSquared() > 1e-1f) {
-                        Vector3D up = Vector3D.Normalize(quat * spaceship.gravity);
-                        Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, direction));
-                        Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
-                        float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
-                        Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
-                        Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
-                            control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-
-                        gyro.Pitch = -(float)final.X;
-                        gyro.Yaw = -(float)final.Y;
-                        gyro.Roll = -(float)final.Z;
+                        Allign(direction, spaceship.gravity, gyro, control);
                     } else {
+                        Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
+                        quat.Conjugate();
+                        direction = quat * direction;
                         Vector3.GetAzimuthAndElevation(direction, out azimuth, out elevation);
-                        Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, 0.0f),
-                            control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-
-                        gyro.Pitch = -(float)final.X;
-                        gyro.Yaw = -(float)final.Y;
-                        gyro.Roll = -(float)final.Z;
+                        Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, 0.0f), control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+                        ApplyGyro(-final);
                     }
-
-
                 }
 
                 public void OnUpdateFrame() {
@@ -297,9 +266,7 @@ namespace IngameScript {
 
                 public void Disable() {
                     gyro.GyroOverride = false;
-                    gyro.Pitch = 0.0f;
-                    gyro.Yaw = 0.0f;
-                    gyro.Roll = 0.0f;
+                    ApplyGyro(Vector3.Zero);
                 }
             }
 
@@ -315,7 +282,7 @@ namespace IngameScript {
                     public float speed;
                     public SpaceshipFlags flags = 0;
 
-                    public static Waypoint FromGPS(Spaceship spaceship, string gps_text, float speed, SpaceshipFlags flags = SpaceshipFlags.Enroute) {
+                    public static Waypoint FromGPS(string gps_text, float speed, SpaceshipFlags flags = SpaceshipFlags.Enroute) {
                         string[] tokens = gps_text.Split(':');
                         Waypoint wpt = new Waypoint();
                         wpt.name = tokens[1];
@@ -392,7 +359,7 @@ namespace IngameScript {
                     } else {
                         target_speed = (prev.speed * (1.0f - p) + next.speed * p);
                     }
-                    Spaceship.Vector3DLimit(ref result, (float)target_speed);
+                    Vector3DLimit(ref result, (float)target_speed);
                     return result;
                 }
 
@@ -724,14 +691,37 @@ namespace IngameScript {
 
                 }
 
+                public string DrawTextProgressBar(float v, int size)  {
+                    string result = "";
+                    int iv = (int)Math.Round(v * size);
+                    for (int i = 0; i < size; i++)
+                        if (i < iv)
+                            result += (char)178;
+                        else
+                            result += (char)176;
+                        
+                    return result;
+                }
+
                 public override string Draw() {
                     string result = base.Draw();
+
+                    List<string> online_systems = new List<string>();
+                    if ((spaceship.flags & SpaceshipFlags.AP) == SpaceshipFlags.AP) online_systems.Add("AP");
+                    if ((spaceship.flags & SpaceshipFlags.FD) == SpaceshipFlags.FD) online_systems.Add("FD");
+                    if ((spaceship.flags & SpaceshipFlags.TM) == SpaceshipFlags.TM) online_systems.Add("TM");
+                    if ((spaceship.flags & SpaceshipFlags.CAS) == SpaceshipFlags.CAS) online_systems.Add("CAS");
+                    if ((spaceship.flags & SpaceshipFlags.LookAt) == SpaceshipFlags.LookAt) online_systems.Add("LAT");
+                    if ((spaceship.flags & SpaceshipFlags.LCK) == SpaceshipFlags.LCK) online_systems.Add("LCK");
+                    if ((spaceship.flags & SpaceshipFlags.Alln) == SpaceshipFlags.Alln) online_systems.Add("ALN");
+                    result += string.Join(" ", online_systems) + "\n";
+                    result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
+                    DrawTextProgressBar((float)spaceship.fd.p, 20);
                     if (spaceship.fd.flightplan == null)
                         return result;
 
-                    result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
                     for (int i = 0; i < spaceship.fd.flightplan.waypoints.Count(); i++)
-                        result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "Γ" : i == spaceship.fd.next ? "L" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
+                        result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "╔" : i == spaceship.fd.next ? "╚" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
 
                     return result;
                 }
@@ -1044,14 +1034,7 @@ namespace IngameScript {
                         OnFlightUpdateFrame();
                     }
 
-                    List<string> online_systems = new List<string>();
-                    if ((flags & SpaceshipFlags.AP) == SpaceshipFlags.AP) online_systems.Add("AP");
-                    if ((flags & SpaceshipFlags.FD) == SpaceshipFlags.FD) online_systems.Add("FD");
-                    if ((flags & SpaceshipFlags.TM) == SpaceshipFlags.TM) online_systems.Add("TM");
-                    if ((flags & SpaceshipFlags.CAS) == SpaceshipFlags.CAS) online_systems.Add("CAS");
-                    if ((flags & SpaceshipFlags.LookAt) == SpaceshipFlags.LookAt) online_systems.Add("LAT");
-                    if ((flags & SpaceshipFlags.LCK) == SpaceshipFlags.LCK) online_systems.Add("LCK");
-                    if ((flags & SpaceshipFlags.Alln) == SpaceshipFlags.Alln) online_systems.Add("Alln");
+                    
 
                     debug.WriteText(menu.Draw(this));
                 } catch (Exception ex) {
