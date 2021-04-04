@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31129.286
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Space Enginners JAM", "Space Enginners JAM\Space Enginners JAM.csproj", "{71D711B5-F998-44EA-8348-C05915C6C482}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{71D711B5-F998-44EA-8348-C05915C6C482}.Debug|x64.ActiveCfg = Debug|x64
+		{71D711B5-F998-44EA-8348-C05915C6C482}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6CAE6F0B-6CDB-4AD1-8553-97AF4E100B78}
+	EndGlobalSection
+EndGlobal
