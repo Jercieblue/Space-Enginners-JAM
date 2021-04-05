@@ -26,7 +26,7 @@ namespace IngameScript {
             public const string COMM_CHANNEL = "JAM_CH_1";
             public const float EPSILON = 1e-6f;
             public const float MIN_LOOKAT_DIST = 10.0f;
-            public const int STORAGE_VER = 105;
+            public const int STORAGE_VER = 111;
             public static Vector3D v_epsilon = new Vector3D(EPSILON);
             public static Vector3D[] ManagedThrusterDirections = { -Vector3D.UnitZ, Vector3D.UnitZ, Vector3D.UnitY, -Vector3D.UnitY, -Vector3D.UnitX, Vector3D.UnitX };
         }
@@ -52,6 +52,11 @@ namespace IngameScript {
             public void Clear() {
                 buffer = new byte[512];
                 Reset();
+            }
+
+            public void ReadBool(out bool v) {
+                v = BitConverter.ToBoolean(buffer, index);
+                index += sizeof(bool);
             }
 
             public void ReadFloat(out float v) {
@@ -105,6 +110,10 @@ namespace IngameScript {
 
                 Array.Copy(data, 0, buffer, index, data.Length);
                 index += data.Length;
+            }
+
+            public void Write(bool v) {
+                Write(BitConverter.GetBytes(v));
             }
 
             public void Write(float v) {
@@ -167,7 +176,7 @@ namespace IngameScript {
 
             #region Enumurators
                 public enum ManagedThrusterDirectionType { Forward, Backward, Up, Down, Left, Right, Invalid }
-                public enum SpaceshipFlags : UInt64 {
+                public enum SpaceshipFlags : long {
                     AP = 1 << 0,
                     FD = 1 << 1,
                     CAS = 1 << 2,
@@ -444,13 +453,13 @@ namespace IngameScript {
                             ApplyGyro(Vector3.Zero);
                         }
                     }
-                    public class Flightplan {
+                    public class Flightplan :ISerializable {
 
                         public class DockInfo {
                             public MatrixD matrix = MatrixD.Identity;
                         }
 
-                        public class Waypoint {
+                        public class Waypoint : ISerializable {
                             public string name;
                             public Vector3D position;
                             public float speed;
@@ -465,6 +474,20 @@ namespace IngameScript {
                                 wpt.flags = flags;
                                 return wpt;
                             }
+
+                            public void Serialize(MemoryStream ms) {
+                                ms.Write(name);
+                                ms.Write(position);
+                                ms.Write(speed);
+                                ms.Write((int)flags);
+                            }
+
+                            public void Deserialize(MemoryStream ms) {
+                                ms.ReadString(out name);
+                                ms.Read(out position);
+                                ms.ReadFloat(out speed);
+                                int t_flags; ms.ReadInt(out t_flags); flags = (SpaceshipFlags)t_flags;
+                            }
                         }
 
                         public DockInfo departure = new DockInfo(), arrival = new DockInfo();
@@ -473,9 +496,29 @@ namespace IngameScript {
                         public bool IsValid() {
                             return waypoints.Count() > 1;
                         }
+
+                        public void Serialize(MemoryStream ms) {
+                            ms.Write(departure.matrix);
+                            ms.Write(arrival.matrix);
+                            ms.Write(waypoints.Count);
+                            for (int i = 0; i < waypoints.Count; i++)
+                                waypoints[i].Serialize(ms);
+                        }
+
+                        public void Deserialize(MemoryStream ms) {
+                            ms.Read(out departure.matrix);
+                            ms.Read(out arrival.matrix);
+                            int waypoints_counter;
+                            ms.ReadInt(out waypoints_counter);
+                            for (int i = 0;i < waypoints_counter; i++) {
+                                Waypoint waypoint = new Waypoint();
+                                waypoint.Deserialize(ms);
+                                waypoints.Add(waypoint);
+                            }
+                        }
                     }
 
-                    public class FlightDirector : ISpaceshipComponent {
+                    public class FlightDirector : ISpaceshipComponent, ISerializable {
 
                         Spaceship spaceship;
                         public Flightplan flightplan;
@@ -503,7 +546,7 @@ namespace IngameScript {
                             Vector3D position_on_route = Vector3D.ProjectOnVector(ref to_spaceship, ref to_nextwpt);
                             Vector3D result = next.position - position;
                             //result += position_on_route - position;
-
+                    
                             double distance_between_wpts = Vector3D.Distance(prev.position, next.position);
                             double distance_from_prev = Vector3D.Distance(prev.position, position);
                             double distance_to_next = Vector3D.Distance(next.position, position);
@@ -550,13 +593,35 @@ namespace IngameScript {
                         }
 
                         public void Enable() {
-
+                            
                         }
 
                         public void Disable() {
 
                         }
 
+                        public void Serialize(MemoryStream ms) {
+                            if (flightplan != null) {
+                                ms.Write(true);
+                                flightplan.Serialize(ms);
+                            } else {
+                                ms.Write(false);
+                            }
+                            ms.Write(prev);
+                            ms.Write(next);
+                            ms.Write(active_waypoint);
+                        }
+
+                        public void Deserialize(MemoryStream ms) {
+                            bool has_flightplan; ms.ReadBool(out has_flightplan);
+                            if (has_flightplan) {
+                                flightplan = new Flightplan();
+                                flightplan.Deserialize(ms);
+                            }
+                            ms.ReadInt(out prev);
+                            ms.ReadInt(out next);
+                            ms.ReadInt(out active_waypoint);
+                        }
                     }
                     public class CollisionAvoidanceSystem : ISpaceshipComponent {
                         Spaceship spaceship;
@@ -699,10 +764,8 @@ namespace IngameScript {
                             }
 
                             public void Deserialize(MemoryStream ms) {
-                                int t;
-                                ms.ReadInt(out t);
+                                int t; ms.ReadInt(out t); type = (TaskType)t;
                                 ms.ReadLong(out destination);
-                                type = (TaskType)t;
                             }
                         }
     
@@ -779,6 +842,9 @@ namespace IngameScript {
                             foreach (Task task in tasks) {
                                 task.Serialize(ms);
                             }
+                            ms.Write(active_task);
+                            ms.Write((int)state);
+                            ms.Write((int)next_state);
                         }
 
                         public void Deserialize(MemoryStream ms) {
@@ -789,6 +855,9 @@ namespace IngameScript {
                                 task.Deserialize(ms);
                                 tasks.Add(task);
                             }
+                            ms.ReadInt(out active_task);
+                            int temp_state; ms.ReadInt(out temp_state); state = (TaskManagerState)temp_state;
+                            int temp_next_state; ms.ReadInt(out temp_next_state); next_state = (TaskManagerState)temp_next_state;
                         }
                     }
                 #endregion
@@ -1181,6 +1250,7 @@ namespace IngameScript {
                     fp.waypoints.Add(new Flightplan.Waypoint { name = "DCK", position = world_position, speed = Settings.DOCKING_SPEED, flags = SpaceshipFlags.Dock });
                     return fp;
                 }
+
                 public void OnUpdateFrame(string argument, UpdateType updateSource) {
                     if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
                         while (listener.HasPendingMessage) {
@@ -1218,14 +1288,18 @@ namespace IngameScript {
 
                 public void Serialize(MemoryStream ms) {
                     debug.WriteText("Writing\n");
+                    
                     ms.Write(destinations.Count);
                     debug.WriteText(destinations.Count.ToString() + "\n");
                     foreach (Destination destination in destinations.Values) {
                         debug.WriteText(string.Format("DestinationID {0}\n", destination.id), true);
                         destination.Serialize(ms);
                     }   
-
+                    
                     tasks.Serialize(ms);
+                    fd.Serialize(ms);
+                    ms.Write((long)flags);
+                    ms.Write(is_enabled);
                 }
 
                 public void Deserialize(MemoryStream ms) {
@@ -1240,6 +1314,9 @@ namespace IngameScript {
                         destinations.Add(destination.id, destination);
                     }
                     tasks.Deserialize(ms);
+                    fd.Deserialize(ms);
+                    long temp_flags; ms.ReadLong(out temp_flags); flags = (SpaceshipFlags)temp_flags;
+                    bool temp_is_enabled; ms.ReadBool(out temp_is_enabled);if (temp_is_enabled) Enable();
                 }
 
             #endregion
@@ -1294,6 +1371,10 @@ namespace IngameScript {
                 spaceship.debug.WriteText(ex.ToString(), true);
                 throw;
             }
+        }
+
+        public void Console(string str) {
+            Echo(str);
         }
 
         public void Save() {
