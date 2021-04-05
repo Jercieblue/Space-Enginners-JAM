@@ -5,20 +5,165 @@ using System.Linq;
 using VRage;
 using VRage.Game.GUI.TextPanel;
 using VRageMath;
+using System.Text;
 
 namespace IngameScript {
-
     partial class Program : MyGridProgram {
+        public class Settings {
+            public const string TAG = "JAM";
+            public const bool AutoStartThrusters = true;
+            public const float CASDistanceExtension = 1.0f;
+            public const float MinRayDist = 0.0f;
+            public const float MinThrustEffectivness = 0.30f; // When the effectivness of the thruster drops below gets deactivated
+            public const float ApproachHeight = 100.0f;
+            public const float APPROACH_SPEED = 5.0f;
+            public const float DEPARTURE_SPEED = 10.0f;
+            public const float DOCKING_SPEED = 1.0f;
+            public const float MAX_SPEED = 95.0f;
+            public const float ARRIVAL_DIST = 2000.0f;
+            public const float MIN_CHECK_DIST = 1e-1f;
+            public const float MAX_SCAN_DIST = 500.0f;  // The max scan range for the radar to avoid obsticles
+            public const string COMM_CHANNEL = "JAM_CH_1";
+            public const float EPSILON = 1e-6f;
+            public const float MIN_LOOKAT_DIST = 10.0f;
+            public const int STORAGE_VER = 105;
+            public static Vector3D v_epsilon = new Vector3D(EPSILON);
+            public static Vector3D[] ManagedThrusterDirections = { -Vector3D.UnitZ, Vector3D.UnitZ, Vector3D.UnitY, -Vector3D.UnitY, -Vector3D.UnitX, Vector3D.UnitX };
+        }
+        public interface ISerializable {
+            void Serialize(MemoryStream ms);
+            void Deserialize(MemoryStream ms);
+        }
 
-        public class Spaceship {
+        #region Serializer
+        public class MemoryStream : IDisposable {
+            byte[] buffer = new byte[512];
+            int index = 0;
+            public MemoryStream() {
 
-            #region Static Variables
-                public static string TAG = "JAM";
-                public static float MAX_SPEED = 95.0f;
-                public static float ARRIVAL_DIST = 2000.0f;
-                public static string channel = "JAM_CH_1";
-                public static Vector3D[] ManagedThrusterDirections = { -Vector3D.UnitZ, Vector3D.UnitZ, Vector3D.UnitY, -Vector3D.UnitY, -Vector3D.UnitX, Vector3D.UnitX };
-            #endregion
+            }
+            public MemoryStream(string str) {
+                FromString(str);
+            }
+            public void Reset() {
+                index = 0;
+            }
+
+            public void Clear() {
+                buffer = new byte[512];
+                Reset();
+            }
+
+            public void ReadFloat(out float v) {
+                v = BitConverter.ToSingle(buffer, index);
+                index += sizeof(float);
+            }
+
+            public void ReadDouble(out double v) {
+                v = BitConverter.ToDouble(buffer, index);
+                index += sizeof(double);
+            }
+
+            public void ReadString(out string str) {
+                int length;
+                ReadInt(out length);
+                str = Encoding.ASCII.GetString(buffer, index, length);
+                index += length;
+            }
+
+            public void ReadInt(out int v) {
+                v = BitConverter.ToInt32(buffer, index);
+                index += sizeof(int);
+            }
+
+            public void ReadLong(out long v) {
+                v = BitConverter.ToInt64(buffer, index);
+                index += sizeof(long);
+            }
+
+            public void Read(out Vector3D v) {
+                v = Vector3D.Zero;
+                ReadDouble(out v.X); ReadDouble(out v.Y); ReadDouble(out v.Z);
+            }
+
+            public void Read(out Vector3 v) {
+                v = Vector3.Zero;
+                ReadFloat(out v.X); ReadFloat(out v.Y); ReadFloat(out v.Z);
+            }
+
+            public void Read(out MatrixD m) {
+                m = MatrixD.Identity;
+                ReadDouble(out m.M11); ReadDouble(out m.M12); ReadDouble(out m.M13); ReadDouble(out m.M14);
+                ReadDouble(out m.M21); ReadDouble(out m.M22); ReadDouble(out m.M23); ReadDouble(out m.M24);
+                ReadDouble(out m.M31); ReadDouble(out m.M32); ReadDouble(out m.M33); ReadDouble(out m.M34);
+                ReadDouble(out m.M41); ReadDouble(out m.M42); ReadDouble(out m.M43); ReadDouble(out m.M44);
+            }
+
+            public void Write(Byte[] data) {
+                if (buffer.Length < (index + data.Length))
+                    Array.Resize(ref buffer, buffer.Length * 2);
+
+                Array.Copy(data, 0, buffer, index, data.Length);
+                index += data.Length;
+            }
+
+            public void Write(float v) {
+                Write(BitConverter.GetBytes(v));
+            }
+
+            public void Write(double v) {
+                Write(BitConverter.GetBytes(v));
+            }
+
+            public void Write(string str) {
+                byte[] bytes = Encoding.ASCII.GetBytes(str);
+                Write(bytes.Length);
+                Write(bytes);
+            }
+
+            public void Write(int v) {
+                Write(BitConverter.GetBytes(v));
+            }
+
+            public void Write(long v) {
+                Write(BitConverter.GetBytes(v));
+            }
+
+            public void Write(Vector3D v) {
+                Write(BitConverter.GetBytes(v.X));
+                Write(BitConverter.GetBytes(v.Y));
+                Write(BitConverter.GetBytes(v.Z));
+            }
+
+            public void Write(Vector3 v) {
+                Write(BitConverter.GetBytes(v.X));
+                Write(BitConverter.GetBytes(v.Y));
+                Write(BitConverter.GetBytes(v.Z));
+            }
+
+            public void Write(MatrixD m) {
+                Write(BitConverter.GetBytes(m.M11)); Write(BitConverter.GetBytes(m.M12)); Write(BitConverter.GetBytes(m.M13)); Write(BitConverter.GetBytes(m.M14));
+                Write(BitConverter.GetBytes(m.M21)); Write(BitConverter.GetBytes(m.M22)); Write(BitConverter.GetBytes(m.M23)); Write(BitConverter.GetBytes(m.M24));
+                Write(BitConverter.GetBytes(m.M31)); Write(BitConverter.GetBytes(m.M32)); Write(BitConverter.GetBytes(m.M33)); Write(BitConverter.GetBytes(m.M34));
+                Write(BitConverter.GetBytes(m.M41)); Write(BitConverter.GetBytes(m.M42)); Write(BitConverter.GetBytes(m.M43)); Write(BitConverter.GetBytes(m.M44));
+            }
+
+            public void FromString(string str) {
+                buffer = System.Convert.FromBase64String(str);
+            }
+
+            public override string ToString() {
+                return System.Convert.ToBase64String(buffer, 0, index);
+            }
+
+            public void Dispose() {
+                
+            }
+        }
+
+        #endregion
+
+        public class Spaceship : ISerializable {
 
             #region Enumurators
                 public enum ManagedThrusterDirectionType { Forward, Backward, Up, Down, Left, Right, Invalid }
@@ -40,24 +185,13 @@ namespace IngameScript {
 
             #region Interfaces
                 public interface ISpaceshipComponent {
-                    void Enable();
-                    void Disable();
+                void Enable();
+                void Disable();
 
-                }
-                public interface ISerializable {
-                    void Serialize();
-                    void Deserialize();
-                }
+            }
             #endregion
-
+        
             #region Classes
-                public class Settings {
-                    public bool AutoStartThrusters = true;
-                    public float CASDistanceExtension = 1.0f;
-                    public float MinRayDist = 0.0f;
-                    public float MinThrustEffectivness = 0.30f; // When the effectivness of the thruster drops below gets deactivated
-                    public float ApproachHeight = 100.0f;
-                }
 
                 #region Components
                     public class ManagedThruster {
@@ -128,19 +262,19 @@ namespace IngameScript {
                         public void ApplyThrusters(float[] required_thrust) {
                             foreach (ManagedThruster thruster in thrusters) {
                                 float thrust_effectivness = thruster.thruster.MaxEffectiveThrust / thruster.thruster.MaxThrust;
-                                if (thrust_effectivness > settings.MinThrustEffectivness) {
+                                if (thrust_effectivness > Settings.MinThrustEffectivness) {
                                     thruster.thruster.ThrustOverride = required_thrust[(int)thruster.direction_type] * thruster.power / thrust_effectivness;
                                 } else {
                                     thruster.thruster.ThrustOverride = 0.0f;
                                 }
 
                                 if (IsAtmospheric)
-                                    spaceship.AtmosphericThrustersOnline = thrust_effectivness > settings.MinThrustEffectivness;
+                                    spaceship.AtmosphericThrustersOnline = thrust_effectivness > Settings.MinThrustEffectivness;
 
-                                if (settings.AutoStartThrusters) {
-                                    if (thruster.thruster.ThrustOverride >= 1e-1f && !thruster.thruster.Enabled)
+                                if (Settings.AutoStartThrusters) {
+                                    if (thruster.thruster.ThrustOverride >= Settings.EPSILON && !thruster.thruster.Enabled)
                                         thruster.thruster.Enabled = true;
-                                    else if (thruster.thruster.ThrustOverride < 1e-1f && thruster.thruster.Enabled)
+                                    else if (thruster.thruster.ThrustOverride < Settings.EPSILON && thruster.thruster.Enabled)
                                         thruster.thruster.Enabled = false;
                                 }
                             }
@@ -161,7 +295,7 @@ namespace IngameScript {
                         }
 
                         public void Enable() {
-                            if (settings.AutoStartThrusters) {
+                            if (Settings.AutoStartThrusters) {
                                 foreach (ManagedThruster thruster in thrusters)
                                     thruster.thruster.Enabled = false;
                             }
@@ -171,7 +305,7 @@ namespace IngameScript {
                             foreach (ManagedThruster thruster in thrusters)
                                 thruster.thruster.ThrustOverride = 0.0f;
 
-                            if (settings.AutoStartThrusters) {
+                            if (Settings.AutoStartThrusters) {
                                 foreach (ManagedThruster thruster in thrusters)
                                     thruster.thruster.Enabled = true;
                             }
@@ -197,7 +331,7 @@ namespace IngameScript {
                             foreach (ThrusterManager manager in managers)
                                 foreach (ManagedThruster thruster in manager.thrusters)
                                     if (thruster.direction_type == type)
-                                        result += (thruster.thruster.MaxEffectiveThrust / thruster.thruster.MaxThrust) > settings.MinThrustEffectivness ? thruster.thruster.MaxEffectiveThrust : 0.0f;
+                                        result += (thruster.thruster.MaxEffectiveThrust / thruster.thruster.MaxThrust) > Settings.MinThrustEffectivness ? thruster.thruster.MaxEffectiveThrust : 0.0f;
 
                             return result;
                         }
@@ -217,51 +351,76 @@ namespace IngameScript {
                         public void CalculateThrust(Vector3D target_velocity, IMyRemoteControl control) {
                             float mass = control.CalculateShipMass().TotalMass;
                             for (int i = 0; i < 6; i++) {
-                                Vector3D thruster_vector = ManagedThrusterDirections[i];
+                                Vector3D thruster_vector = Settings.ManagedThrusterDirections[i];
                                 required_thrust[i] = 0.0f;
                                 if (Vector3D.Dot(target_velocity, thruster_vector) > 0.0f) {
                                     Vector3D projected_vector = Vector3D.ProjectOnVector(ref target_velocity, ref thruster_vector);
                                     required_thrust[i] = (float)(projected_vector.Length() * mass);
-                                    if (required_thrust[i] < 1e-4f)
+                                    if (required_thrust[i] < Settings.EPSILON)
                                         required_thrust[i] = 0.0f;
                                 }
                             }
                         }
-
-                        public void ApplyGyro(Vector3 values) {
-                            gyro.Pitch = -values.X;
-                            gyro.Yaw = -values.Y;
-                            gyro.Roll = -values.Z;
+                        
+                        void ApplyGyro(Vector3 v) {
+                            gyro.Pitch = -v.X;
+                            gyro.Yaw = -v.Y;
+                            gyro.Roll = -v.Z;
                         }
-
-                        public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyTerminalBlock block) {
-                            Quaternion quat = Quaternion.Conjugate(Quaternion.CreateFromForwardUp(block.WorldMatrix.Forward, block.WorldMatrix.Up));
+                            
+                        public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyShipConnector connector) {
+                            Quaternion quat = Quaternion.CreateFromForwardUp(connector.WorldMatrix.Forward, connector.WorldMatrix.Up);
+                            quat.Conjugate();
                             Vector3D up = Vector3D.Normalize(quat * ws_up);
                             Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, quat * ws_fwd));
                             Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
-                            Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
                             float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
-                            Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right), block.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-                            ApplyGyro(-final);
+                            Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
+                            Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
+                                connector.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+
+                            gyro.Pitch = -(float)final.X;
+                            gyro.Yaw = -(float)final.Y;
+                            gyro.Roll = -(float)final.Z;
                         }
 
                         public void LookAt(Vector3D target, IMyGyro gyro, IMyRemoteControl control) {
                             Vector3D offet = (target - control.GetPosition());
                             if (offet.Length() < 10.0f) {
-                                ApplyGyro(Vector3.Zero);
+                                gyro.Pitch = 0.0f;
+                                gyro.Yaw = 0.0f;
+                                gyro.Roll = 0.0f;
                                 return;
                             }
+
                             Vector3 direction = Vector3D.Normalize(offet);
+                            Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
+                            quat.Conjugate();
+                            direction = quat * direction;
+
                             if (spaceship.AtmosphericThrustersOnline && spaceship.gravity.LengthSquared() > 1e-1f) {
-                                Allign(direction, spaceship.gravity, gyro, control);
+                                Vector3D up = Vector3D.Normalize(quat * spaceship.gravity);
+                                Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, direction));
+                                Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
+                                float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
+                                Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
+                                Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
+                                    control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+
+                                gyro.Pitch = -(float)final.X;
+                                gyro.Yaw = -(float)final.Y;
+                                gyro.Roll = -(float)final.Z;
                             } else {
-                                Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
-                                quat.Conjugate();
-                                direction = quat * direction;
                                 Vector3.GetAzimuthAndElevation(direction, out azimuth, out elevation);
-                                Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, 0.0f), control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-                                ApplyGyro(-final);
+                                Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, 0.0f),
+                                    control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+
+                                gyro.Pitch = -(float)final.X;
+                                gyro.Yaw = -(float)final.Y;
+                                gyro.Roll = -(float)final.Z;
                             }
+
+
                         }
 
                         public void OnUpdateFrame() {
@@ -315,6 +474,7 @@ namespace IngameScript {
                             return waypoints.Count() > 1;
                         }
                     }
+
                     public class FlightDirector : ISpaceshipComponent {
 
                         Spaceship spaceship;
@@ -337,37 +497,23 @@ namespace IngameScript {
                             }
                         }
 
-                        Vector3D v_epsilon = new Vector3D(1e-6f);
-
-                        public Vector3D Arrive(Vector3D position, Vector3D velocity, Vector3D target, float max_distance) {
-                            Vector3D future_position = position + Vector3D.Normalize(velocity + v_epsilon) * spaceship.effective_breaking_distance;
-
-                            double dist = Vector3D.Distance(target, future_position);
-                            if (dist < 1e-2f)
-                                return Vector3D.Zero;
-                            else if (dist > max_distance)
-                                return Vector3D.Normalize(target - future_position) * MAX_SPEED;
-                            else
-                                return Vector3D.Normalize(target - future_position) * (dist / max_distance) * MAX_SPEED;
-                        }
-
                         public Vector3D Enroute(Flightplan.Waypoint prev, Flightplan.Waypoint next, Vector3D position, Vector3D velocity) {
                             Vector3D to_spaceship = position - prev.position;
                             Vector3D to_nextwpt = next.position - prev.position;
                             Vector3D position_on_route = Vector3D.ProjectOnVector(ref to_spaceship, ref to_nextwpt);
                             Vector3D result = next.position - position;
-                            result += position_on_route - position;
+                            //result += position_on_route - position;
 
                             double distance_between_wpts = Vector3D.Distance(prev.position, next.position);
                             double distance_from_prev = Vector3D.Distance(prev.position, position);
                             double distance_to_next = Vector3D.Distance(next.position, position);
 
                             p = Math.Max(0.0, Math.Min(1.0, distance_from_prev / distance_between_wpts));
-                            if (distance_between_wpts > ARRIVAL_DIST) {
-                                if (distance_to_next > ARRIVAL_DIST)
-                                    target_speed = MAX_SPEED;
+                            if (distance_between_wpts > Settings.ARRIVAL_DIST) {
+                                if (distance_to_next > Settings.ARRIVAL_DIST)
+                                    target_speed = Settings.MAX_SPEED;
                                 else
-                                    target_speed = Spaceship.Remap(distance_to_next, ARRIVAL_DIST, 0.0, MAX_SPEED, next.speed);
+                                    target_speed = Remap(distance_to_next, Settings.ARRIVAL_DIST, 0.0, Settings.MAX_SPEED, next.speed);
                             } else {
                                 target_speed = (prev.speed * (1.0f - p) + next.speed * p);
                             }
@@ -378,14 +524,13 @@ namespace IngameScript {
                         public void OnUpdateFrame() {
                             if ((prev != next) && (flightplan != null)) {
 
-                                if (Vector3D.Distance(flightplan.waypoints[next].position, spaceship.GetPosition()) < 0.1f)
+                                if (Vector3D.Distance(flightplan.waypoints[next].position, spaceship.GetPosition()) < Settings.MIN_CHECK_DIST)
                                     NextWaypoint();
 
                                 if ((spaceship.flags & SpaceshipFlags.Approach) == SpaceshipFlags.Approach)
                                     spaceship.desired += Enroute(flightplan.waypoints[prev], flightplan.waypoints[next], spaceship.GetPosition(), spaceship.velocity);
                                 else
                                     spaceship.desired += Enroute(flightplan.waypoints[prev], flightplan.waypoints[next], spaceship.GetPosition(), spaceship.velocity);
-
 
                             }
                         }
@@ -427,9 +572,9 @@ namespace IngameScript {
 
                         public void OnUpdateFrame() {
                             foreach (Sensor sensor in sensors) {
-                                sensor.range = Math.Max(settings.MinRayDist, 500.0f * ((float)spaceship.velocity.Length() / 100.0f));
+                                sensor.range = Math.Max(Settings.MinRayDist, Settings.MAX_SCAN_DIST * ((float)spaceship.velocity.Length() / 100.0f));
                                 sensor.OnUpdateFrame();
-                                spaceship.desired += -sensor.direction * (1.0f - sensor.value) * Spaceship.MAX_SPEED;
+                                spaceship.desired += -sensor.direction * (1.0f - sensor.value) * Settings.MAX_SPEED;
                             }
                         }
 
@@ -512,17 +657,31 @@ namespace IngameScript {
                             camera.EnableRaycast = false;
                         }
                     }
-                    public class Destination {
+                    public class Destination : ISerializable {
                         public long id;
                         public string name;
                         public MatrixD matrix;
                         public float size;
 
+                        public void Serialize(MemoryStream ms) {
+                            ms.Write(id);
+                            ms.Write(name);
+                            ms.Write(matrix);
+                            ms.Write(size);
+                        }
+
+                        public void Deserialize(MemoryStream ms) {
+                            ms.ReadLong(out id);
+                            ms.ReadString(out name);
+                            ms.Read(out matrix);
+                            ms.ReadFloat(out size);
+                        }
+    
                         public override string ToString() {
                             return name;
                         }
                     }
-                    public class TaskManager {
+                    public class TaskManager : ISerializable {
                         public enum TaskType {
                             Navigation, Load, Unload, Charge, Repeat, Total
                         }
@@ -530,11 +689,23 @@ namespace IngameScript {
                         public enum TaskManagerState {
                             Navigation, Travelling, Action, NextTask
                         }
-                        public class Task {
+                        public class Task : ISerializable {
                             public TaskType type = TaskType.Navigation;
-                            public Destination destination;
-                        }
+                            public long destination = 0;
 
+                            public void Serialize(MemoryStream ms) {
+                                ms.Write((int)type);
+                                ms.Write(destination);
+                            }
+
+                            public void Deserialize(MemoryStream ms) {
+                                int t;
+                                ms.ReadInt(out t);
+                                ms.ReadLong(out destination);
+                                type = (TaskType)t;
+                            }
+                        }
+    
                         public List<Task> tasks = new List<Task>();
                         public int active_task = 0;
                         public TaskManagerState state = TaskManagerState.Navigation;
@@ -544,8 +715,8 @@ namespace IngameScript {
                             state = next_state;
                             switch (state) {
                                 case TaskManagerState.Navigation:
-                                    if (tasks[active_task].destination != null) {
-                                        spaceship.fd.SetFlightPlan(spaceship.GenerateFlightPlan(tasks[active_task].destination));
+                                    if (tasks[active_task].destination != 0) {
+                                        spaceship.fd.SetFlightPlan(spaceship.GenerateFlightPlan(spaceship.destinations[tasks[active_task].destination]));
                                         spaceship.fd.StartFlight();
                                         next_state = TaskManagerState.Travelling;
                                     } else {
@@ -600,6 +771,23 @@ namespace IngameScript {
                                     }
                                     break;
 
+                            }
+                        }
+
+                        public void Serialize(MemoryStream ms) {
+                            ms.Write(tasks.Count);
+                            foreach (Task task in tasks) {
+                                task.Serialize(ms);
+                            }
+                        }
+
+                        public void Deserialize(MemoryStream ms) {
+                            int tasks_count;
+                            ms.ReadInt(out tasks_count);
+                            for (int i = 0; i < tasks_count; i++) {
+                                var task = new Task();
+                                task.Deserialize(ms);
+                                tasks.Add(task);
                             }
                         }
                     }
@@ -698,9 +886,9 @@ namespace IngameScript {
                             int iv = (int)Math.Round(v * size);
                             for (int i = 0; i < size; i++)
                                 if (i < iv)
-                                    result += (char)178;
+                                    result += "▓";
                                 else
-                                    result += (char)176;
+                                    result += "░";
                         
                             return result;
                         }
@@ -718,7 +906,8 @@ namespace IngameScript {
                             if ((spaceship.flags & SpaceshipFlags.Alln) == SpaceshipFlags.Alln) online_systems.Add("ALN");
                             result += string.Join(" ", online_systems) + "\n";
                             result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
-                            DrawTextProgressBar((float)spaceship.fd.p, 20);
+                            result += string.Format("Azimuth: {0:0.00}, Elevation: {1:0.00}\n", spaceship.autopilot.azimuth, spaceship.autopilot.elevation);
+                            result += DrawTextProgressBar((float)spaceship.fd.p, 20) + "\n";
                             if (spaceship.fd.flightplan == null)
                                 return result;
 
@@ -744,7 +933,7 @@ namespace IngameScript {
                         }
                         public override bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args) {
                             if (command == MenuCommand.Select) {
-                                task.destination = spaceship.destinations.Values.ElementAt(index);
+                                task.destination = spaceship.destinations.Values.ElementAt(index).id;
                                 stack.Pop();
                                 return true;
                             } else {
@@ -761,7 +950,7 @@ namespace IngameScript {
                             void UpdateMenu() {
                                 sub.Clear();
                                 sub.Add(new Menu("Task: " + task.type.ToString()));
-                                sub.Add(new Menu("Destination: " + (task.destination != null ? task.destination.ToString() : "No Destination")));
+                                sub.Add(new Menu("Destination: " + (task.destination != 0 ? spaceship.destinations[task.destination].ToString() : "No Destination")));
                             }
 
                             public MenuTask(TaskManager.Task task) : base(task.ToString()) {
@@ -787,7 +976,7 @@ namespace IngameScript {
                             }
 
                             public override string ToString() {
-                                return string.Format("({0}){1}", task.type, task.destination != null ? task.destination.ToString() : "No Destination");
+                                return string.Format("({0}){1}", task.type, task.destination != 0 ? spaceship.destinations[task.destination].ToString() : "No Destination");
                             }
                         }
 
@@ -815,22 +1004,22 @@ namespace IngameScript {
                             }
                         }
                     }
-                #endregion
+            #endregion
+
+            
 
             #endregion
 
             #region Spaceship Variables
-                public IMyGridTerminalSystem system;
+            public IMyGridTerminalSystem system;
                 public IMyIntergridCommunicationSystem igc;
                 public IMyProgrammableBlock cpu;
                 public IMyRemoteControl control;
                 public IMyShipConnector connector;
                 public IMyCockpit cockpit;
                 public IMyTextSurface screen, debug;
-                public IMyRadioAntenna radio;
                 public IMyBroadcastListener listener;
 
-                public static Settings settings = new Settings();
                 public Dictionary<long, Destination> destinations = new Dictionary<long, Destination>();
 
                 public List<ThrusterManager> managers = new List<ThrusterManager>();
@@ -872,11 +1061,12 @@ namespace IngameScript {
                     MySpriteDrawFrame frame = screen.DrawFrame();
 
                     frame.Add(new MySprite(SpriteType.TEXTURE, "SquareSimple", new Vector2(0, 0), new Vector2(512, 512), Color.Black));
-                    frame.Add(MySprite.CreateText("Test", "DEBUG", Color.White));
+                    frame.Add(MySprite.CreateText("Ftiaxe Me!!!", "DEBUG", Color.White));
                     frame.Dispose();
 
-                    listener = igc.RegisterBroadcastListener(channel);
-                    listener.SetMessageCallback(channel);
+                    listener = igc.RegisterBroadcastListener(Settings.COMM_CHANNEL);
+                    listener = igc.RegisterBroadcastListener(Settings.COMM_CHANNEL);
+                    listener.SetMessageCallback(Settings.COMM_CHANNEL);
 
                     managers.Add(new ThrusterManager("LargeAtmosphericThrust", this, control, system, true));
                     managers.Add(new ThrusterManager("SmallAtmosphericThrust", this, control, system, true));
@@ -929,7 +1119,7 @@ namespace IngameScript {
                         if ((flags & SpaceshipFlags.CAS) == SpaceshipFlags.CAS) cas.OnUpdateFrame();
                         if ((flags & SpaceshipFlags.FD) == SpaceshipFlags.FD) fd.OnUpdateFrame();
 
-                        Vector3DLimit(ref desired, MAX_SPEED);
+                        Vector3DLimit(ref desired, Settings.MAX_SPEED);
 
                         if ((flags & SpaceshipFlags.AP) == SpaceshipFlags.AP) autopilot.OnUpdateFrame();
 
@@ -978,56 +1168,80 @@ namespace IngameScript {
 
                     if (connector.Status == MyShipConnectorStatus.Connected) {
                         fp.departure.matrix = connector.OtherConnector.WorldMatrix;
-                        fp.waypoints.Add(new Flightplan.Waypoint { name = "UDCK", position = connector.WorldMatrix.Translation, speed = 5, flags = SpaceshipFlags.Undock });
-                        fp.waypoints.Add(new Flightplan.Waypoint { name = "DEPT", position = connector.WorldMatrix.Translation + connector.OtherConnector.WorldMatrix.Forward * settings.ApproachHeight, speed = 10, flags = SpaceshipFlags.Enroute });
+                        fp.waypoints.Add(new Flightplan.Waypoint { name = "UDCK", position = connector.WorldMatrix.Translation, speed = Settings.DEPARTURE_SPEED, flags = SpaceshipFlags.Undock });
+                        fp.waypoints.Add(new Flightplan.Waypoint { name = "DEPT", position = connector.WorldMatrix.Translation + connector.OtherConnector.WorldMatrix.Forward * Settings.ApproachHeight, speed = 10, flags = SpaceshipFlags.Enroute });
                     } else {
-                        fp.waypoints.Add(new Flightplan.Waypoint { name = "WPT", position = connector.WorldMatrix.Translation, speed = MAX_SPEED, flags = SpaceshipFlags.Enroute });
+                        fp.waypoints.Add(new Flightplan.Waypoint { name = "WPT", position = connector.WorldMatrix.Translation, speed = Settings.MAX_SPEED, flags = SpaceshipFlags.Enroute });
                     }
 
                     fp.arrival.matrix = destination.matrix;
 
                     Vector3D world_position = fp.arrival.matrix.Translation + fp.arrival.matrix.Forward * destination.size * 0.5;
-                    fp.waypoints.Add(new Flightplan.Waypoint { name = "ARVL", position = world_position + fp.arrival.matrix.Forward * settings.ApproachHeight, speed = 10, flags = SpaceshipFlags.Approach });
-                    fp.waypoints.Add(new Flightplan.Waypoint { name = "DCK", position = world_position, speed = 1.0f, flags = SpaceshipFlags.Dock });
+                    fp.waypoints.Add(new Flightplan.Waypoint { name = "ARVL", position = world_position + fp.arrival.matrix.Forward * Settings.ApproachHeight, speed = Settings.APPROACH_SPEED, flags = SpaceshipFlags.Approach });
+                    fp.waypoints.Add(new Flightplan.Waypoint { name = "DCK", position = world_position, speed = Settings.DOCKING_SPEED, flags = SpaceshipFlags.Dock });
                     return fp;
                 }
                 public void OnUpdateFrame(string argument, UpdateType updateSource) {
-                    try {
-                        if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
-                            while (listener.HasPendingMessage) {
-                                MyIGCMessage message = listener.AcceptMessage();
-                                MyTuple<long, string, MatrixD, float> packet = message.As<MyTuple<long, string, MatrixD, float>>();
-                                if (destinations.ContainsKey(packet.Item1)) {
-                                    destinations[packet.Item1].id = packet.Item1;
-                                    destinations[packet.Item1].name = packet.Item2;
-                                    destinations[packet.Item1].matrix = packet.Item3;
-                                    destinations[packet.Item1].size = packet.Item4;
-                                } else {
-                                    destinations.Add(packet.Item1, new Destination { id = packet.Item1, name = packet.Item2, matrix = packet.Item3, size = packet.Item4 });
-                                }
+                    if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
+                        while (listener.HasPendingMessage) {
+                            MyIGCMessage message = listener.AcceptMessage();
+                            MyTuple<long, string, MatrixD, float> packet = message.As<MyTuple<long, string, MatrixD, float>>();
+                            if (destinations.ContainsKey(packet.Item1)) {
+                                destinations[packet.Item1].id = packet.Item1;
+                                destinations[packet.Item1].name = packet.Item2;
+                                destinations[packet.Item1].matrix = packet.Item3;
+                                destinations[packet.Item1].size = packet.Item4;
+                            } else {
+                                destinations.Add(packet.Item1, new Destination { id = packet.Item1, name = packet.Item2, matrix = packet.Item3, size = packet.Item4 });
                             }
                         }
-
-                        if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger) {
-                            HandleMenu(argument);
-                        }
-
-                        if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger || (updateSource & UpdateType.Terminal) == UpdateType.Terminal) {
-                            if (argument == "Enable")
-                                Enable();
-                            else if (argument == "Disable")
-                                Disable();
-                        }
-
-                        if ((updateSource & UpdateType.Update10) == UpdateType.Update10) {
-                            OnFlightUpdateFrame();
-                        }
-
-                        debug.WriteText(menu.Draw(this));
-                    } catch (Exception ex) {
-                        debug.WriteText(ex.ToString());
                     }
+
+                    if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger) {
+                        HandleMenu(argument);
+                    }
+
+                    if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger || (updateSource & UpdateType.Terminal) == UpdateType.Terminal) {
+                        if (argument == "Enable")
+                            Enable();
+                        else if (argument == "Disable")
+                            Disable();
+                    }
+
+                    if ((updateSource & UpdateType.Update10) == UpdateType.Update10) {
+                        OnFlightUpdateFrame();
+                    }
+
+                    debug.WriteText(menu.Draw(this));
+                    
                 }
+
+                public void Serialize(MemoryStream ms) {
+                    debug.WriteText("Writing\n");
+                    ms.Write(destinations.Count);
+                    debug.WriteText(destinations.Count.ToString() + "\n");
+                    foreach (Destination destination in destinations.Values) {
+                        debug.WriteText(string.Format("DestinationID {0}\n", destination.id), true);
+                        destination.Serialize(ms);
+                    }   
+
+                    tasks.Serialize(ms);
+                }
+
+                public void Deserialize(MemoryStream ms) {
+                    debug.WriteText("Reading\n");
+                    int destinations_total;
+                    ms.ReadInt(out destinations_total);
+                    debug.WriteText(destinations_total.ToString() +"\n");
+                    for(int i = 0; i < destinations_total; i++) {
+                        var destination = new Destination();
+                        destination.Deserialize(ms);
+                        debug.WriteText(string.Format("DestinationID {0}\n",destination.id), true);
+                        destinations.Add(destination.id, destination);
+                    }
+                    tasks.Deserialize(ms);
+                }
+
             #endregion
         }
 
@@ -1038,7 +1252,7 @@ namespace IngameScript {
                 List<T> temp = new List<T>();
                 system.GetBlocksOfType<T>(temp);
                 foreach (T block in temp) {
-                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Spaceship.TAG))))
+                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Settings.TAG))))
                         return (T)block;
                 }
                 return default(T);
@@ -1048,7 +1262,7 @@ namespace IngameScript {
                 List<T> result = new List<T>();
                 system.GetBlocksOfType<T>(temp);
                 foreach (T block in temp) {
-                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Spaceship.TAG))))
+                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Settings.TAG))))
                         result.Add(block);
                 }
                 return result;
@@ -1064,18 +1278,45 @@ namespace IngameScript {
         #endregion
 
         public Program() {
-            Runtime.UpdateFrequency = UpdateFrequency.Update10;
-            spaceship = new Spaceship(GridTerminalSystem, IGC);
+            try {
+                Runtime.UpdateFrequency = UpdateFrequency.Update10;
+                spaceship = new Spaceship(GridTerminalSystem, IGC);
+                if (Storage.Length > 0) {
+                    using (var ms = new MemoryStream(Storage)) {
+                        int storage_ver;
+                        ms.ReadInt(out storage_ver);
+                        if (storage_ver == Settings.STORAGE_VER) {
+                            spaceship.Deserialize(ms);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                spaceship.debug.WriteText(ex.ToString(), true);
+                throw;
+            }
         }
 
         public void Save() {
-            
+            try {
+                using (var ms = new MemoryStream()) {
+                    ms.Write(Settings.STORAGE_VER);
+                    spaceship.Serialize(ms);
+                    Storage = ms.ToString();
+                }
+            } catch (Exception ex) {
+                spaceship.debug.WriteText(ex.ToString(), true);
+                throw;
+            }
         }
 
         public void Main(string argument, UpdateType updateSource) {
-
-            spaceship.OnUpdateFrame(argument, updateSource);
-            Echo(spaceship.menu.stack.Count.ToString());
+            try {
+                spaceship.OnUpdateFrame(argument, updateSource);
+            } catch (Exception ex) {
+                spaceship.debug.WriteText(ex.ToString(), true);
+                throw;
+            }
+            
         }
     }
 }
