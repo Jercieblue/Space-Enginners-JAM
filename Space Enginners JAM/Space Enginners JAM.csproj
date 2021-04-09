@@ -40,6 +40,7 @@
   <ItemGroup>
     <Compile Include="Autopilot.cs" />
     <Compile Include="CollisionAvoidanceSystem.cs" />
+    <Compile Include="Destination.cs" />
     <Compile Include="FlightDirector.cs" />
     <Compile Include="Flightplan.cs" />
     <Compile Include="MDK\Bootstrapper.cs" />
@@ -56,6 +57,7 @@
     <AdditionalFiles Include="thumb.png" />
     <AdditionalFiles Include="MDK\whitelist.cache" />
     <Compile Include="Sensor.cs" />
+    <Compile Include="Spaceship.cs" />
     <Compile Include="TaskManager.cs" />
     <Compile Include="ThrustersManager.cs" />
   </ItemGroup>
