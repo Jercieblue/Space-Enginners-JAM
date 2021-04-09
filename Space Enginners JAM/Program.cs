@@ -7,6 +7,71 @@ using VRage.Game.GUI.TextPanel;
 using VRageMath;
 using System.Text;
 
+/*
+        static string CHANNEL = "JAM_CH_1";
+        static string TAG = "JAM";
+
+        public class Station {
+            IMyGridTerminalSystem system;
+            IMyIntergridCommunicationSystem igc;
+            IMyProgrammableBlock cpu;
+            IMyTextSurface screen2;
+
+            public Station(IMyGridTerminalSystem system, IMyIntergridCommunicationSystem igc) {
+                this.system = system;
+                this.igc = igc;
+                List<IMyProgrammableBlock> blocks = new List<IMyProgrammableBlock>();
+                system.GetBlocksOfType<IMyProgrammableBlock>(blocks);
+                foreach (IMyProgrammableBlock block in blocks)
+                    if (block.IsRunning)
+                        cpu = block;
+
+                screen2 = cpu.GetSurface(0);
+                screen2.ContentType = ContentType.TEXT_AND_IMAGE;
+            }
+
+            void TransmitConnector(IMyShipConnector connector) {
+                var packet = new MyTuple<long, string, MatrixD, float>(connector.EntityId, connector.CustomName, connector.WorldMatrix, connector.CubeGrid.GridSize);
+                screen2.WriteText(connector.CubeGrid.GridSize.ToString(), true);
+                igc.SendBroadcastMessage(CHANNEL, packet);
+            }
+
+            void TransmitDocks() {
+                List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+                system.GetBlocksOfType<IMyShipConnector>(connectors);
+                foreach (IMyShipConnector connector in connectors) {
+                    if (connector.CustomName.Contains(TAG))
+                        TransmitConnector(connector);
+                }
+            }
+
+            public void OnUpdateFrame(string argument, UpdateType updateSource) {
+                screen2.WriteText("");
+                if (updateSource == UpdateType.Update100) {
+                    TransmitDocks();
+                }
+            }
+        }
+
+        Station station;
+
+        public Program() {
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+            station = new Station(GridTerminalSystem, IGC);
+        }
+
+        public void Save() {
+
+        }
+
+        public void Main(string argument, UpdateType updateSource) {
+            station.OnUpdateFrame(argument, updateSource);
+        }
+ */
+
+
+
+
 namespace IngameScript {
     partial class Program : MyGridProgram {
         public class Settings {
@@ -20,13 +85,14 @@ namespace IngameScript {
             public const float DEPARTURE_SPEED = 10.0f;
             public const float DOCKING_SPEED = 1.0f;
             public const float MAX_SPEED = 95.0f;
-            public const float ARRIVAL_DIST = 2000.0f;
+            public const float ARRIVAL_DIST = 1000.0f;
             public const float MIN_CHECK_DIST = 1e-1f;
             public const float MAX_SCAN_DIST = 500.0f;  // The max scan range for the radar to avoid obsticles
+            public const float SCAN_ANGLE = 15.0f;
             public const string COMM_CHANNEL = "JAM_CH_1";
-            public const float EPSILON = 1e-6f;
+            public const float EPSILON = 1e-3f;
             public const float MIN_LOOKAT_DIST = 10.0f;
-            public const int STORAGE_VER = 111;
+            public const int STORAGE_VER = 112;
             public static Vector3D v_epsilon = new Vector3D(EPSILON);
             public static Vector3D[] ManagedThrusterDirections = { -Vector3D.UnitZ, Vector3D.UnitZ, Vector3D.UnitY, -Vector3D.UnitY, -Vector3D.UnitX, Vector3D.UnitX };
         }
@@ -215,6 +281,7 @@ namespace IngameScript {
                         public List<ManagedThruster> thrusters = new List<ManagedThruster>();
                         public bool IsAtmospheric;
                         Spaceship spaceship;
+                        public float[] max_thrust = new float[6];
 
                         private ManagedThrusterDirectionType GetThrusterDirectionType(Vector3D direction) {
                             if (direction.X > 0.5)
@@ -269,7 +336,11 @@ namespace IngameScript {
                         }
 
                         public void ApplyThrusters(float[] required_thrust) {
+                            for (int i = 0; i < 6; i++)
+                                max_thrust[i] = 0.0f;
+
                             foreach (ManagedThruster thruster in thrusters) {
+                                max_thrust[(int)thruster.direction_type] += thruster.thruster.MaxEffectiveThrust;
                                 float thrust_effectivness = thruster.thruster.MaxEffectiveThrust / thruster.thruster.MaxThrust;
                                 if (thrust_effectivness > Settings.MinThrustEffectivness) {
                                     thruster.thruster.ThrustOverride = required_thrust[(int)thruster.direction_type] * thruster.power / thrust_effectivness;
@@ -308,6 +379,7 @@ namespace IngameScript {
                                 foreach (ManagedThruster thruster in thrusters)
                                     thruster.thruster.Enabled = false;
                             }
+
                         }
 
                         public void Disable() {
@@ -320,41 +392,54 @@ namespace IngameScript {
                             }
                         }
                     }
+                    
+                    public class ThrustersManager : ISpaceshipComponent {
+                        public static List<ThrusterManager> managers = new List<ThrusterManager>();
+                        public static float[] max_thrust = new float[6];
+
+                        public ThrustersManager(Spaceship spaceship, IMyRemoteControl control, IMyGridTerminalSystem system) {
+                            managers.Add(new ThrusterManager("LargeAtmosphericThrust", spaceship, control, system, true));
+                            managers.Add(new ThrusterManager("SmallAtmosphericThrust", spaceship, control, system, true));
+                            managers.Add(new ThrusterManager("LargeThrust", spaceship, control, system));
+                            managers.Add(new ThrusterManager("SmallThrust", spaceship, control, system));
+                            managers.Add(new ThrusterManager("LargeHydrogenThrust", spaceship, control, system));
+                            managers.Add(new ThrusterManager("SmallHydrogenThrust", spaceship, control, system));
+                        }
+
+                        public void OnUpdateFrame() {
+                            for (int i = 0; i < 6; i++)
+                                max_thrust[i] = 0.0f;
+
+                            foreach (ThrusterManager manager in managers) {
+                                manager.ApplyThrusters(Autopilot.required_thrust);
+                                for (int i = 0; i < 6; i++)
+                                    max_thrust[i] += manager.max_thrust[i];
+                            }
+                        }
+
+                        public void Enable() {
+                            foreach (ThrusterManager manager in managers)
+                                manager.Enable();
+                        }
+
+                        public void Disable() {
+                            foreach (ThrusterManager manager in managers)
+                                manager.Disable();
+                        }
+                    }
+            
                     public class Autopilot : ISpaceshipComponent {
                         Spaceship spaceship;
                         public IMyRemoteControl control;
                         public IMyGyro gyro;
                         public float azimuth, elevation;
 
-                        public float[] required_thrust = new float[6];
+                        public static float[] required_thrust = new float[6];
 
                         public Autopilot(Spaceship spaceship, IMyRemoteControl control, IMyGyro gyro) {
                             this.spaceship = spaceship;
                             this.control = control;
                             this.gyro = gyro;
-                        }
-
-                        public float CalculateMaxEffectiveThrust(ManagedThrusterDirectionType type, List<ThrusterManager> managers) {
-                            float result = 0.0f;
-
-                            foreach (ThrusterManager manager in managers)
-                                foreach (ManagedThruster thruster in manager.thrusters)
-                                    if (thruster.direction_type == type)
-                                        result += (thruster.thruster.MaxEffectiveThrust / thruster.thruster.MaxThrust) > Settings.MinThrustEffectivness ? thruster.thruster.MaxEffectiveThrust : 0.0f;
-
-                            return result;
-                        }
-
-                        public float CalculateEffectiveBreakingDistance(float mass, float max_speed, List<ThrusterManager> managers) {
-                            float max_thrust = CalculateMaxEffectiveThrust(ManagedThrusterDirectionType.Backward, managers);
-                            float speed = max_speed;
-                            float meters_travelled = 0.0f;
-                            while (speed > 0.0f) {
-                                meters_travelled += speed;
-                                speed -= max_thrust / mass;
-                            }
-                            meters_travelled += speed;
-                            return meters_travelled;
                         }
 
                         public void CalculateThrust(Vector3D target_velocity, IMyRemoteControl control) {
@@ -372,64 +457,42 @@ namespace IngameScript {
                         }
                         
                         void ApplyGyro(Vector3 v) {
-                            gyro.Pitch = -v.X;
-                            gyro.Yaw = -v.Y;
-                            gyro.Roll = -v.Z;
+                            gyro.Pitch = v.X;
+                            gyro.Yaw = v.Y;
+                            gyro.Roll = v.Z;
                         }
                             
-                        public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyShipConnector connector) {
-                            Quaternion quat = Quaternion.CreateFromForwardUp(connector.WorldMatrix.Forward, connector.WorldMatrix.Up);
-                            quat.Conjugate();
+                        public void Allign(Vector3D ws_fwd, Vector3D ws_up, IMyGyro gyro, IMyTerminalBlock block) {
+                            Quaternion quat = Quaternion.Conjugate(Quaternion.CreateFromForwardUp(block.WorldMatrix.Forward, block.WorldMatrix.Up));
                             Vector3D up = Vector3D.Normalize(quat * ws_up);
                             Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, quat * ws_fwd));
                             Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
-                            float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
                             Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
-                            Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
-                                connector.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-
-                            gyro.Pitch = -(float)final.X;
-                            gyro.Yaw = -(float)final.Y;
-                            gyro.Roll = -(float)final.Z;
+                            Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, (float)Vector3D.Dot(-Vector3D.UnitX, -up)),
+                                block.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
+                            ApplyGyro(-final);
                         }
 
                         public void LookAt(Vector3D target, IMyGyro gyro, IMyRemoteControl control) {
                             Vector3D offet = (target - control.GetPosition());
                             if (offet.Length() < 10.0f) {
-                                gyro.Pitch = 0.0f;
-                                gyro.Yaw = 0.0f;
-                                gyro.Roll = 0.0f;
+                                ApplyGyro(Vector3.Zero);
                                 return;
                             }
 
                             Vector3 direction = Vector3D.Normalize(offet);
-                            Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
-                            quat.Conjugate();
-                            direction = quat * direction;
-
                             if (spaceship.AtmosphericThrustersOnline && spaceship.gravity.LengthSquared() > 1e-1f) {
-                                Vector3D up = Vector3D.Normalize(quat * spaceship.gravity);
-                                Vector3D right = Vector3D.Normalize(Vector3D.Cross(up, direction));
-                                Vector3D front = Vector3D.Normalize(Vector3D.Cross(right, up));
-                                float up_right = (float)Vector3D.Dot(-Vector3D.UnitX, -up);
-                                Vector3.GetAzimuthAndElevation(front, out azimuth, out elevation);
-                                Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, up_right),
-                                    control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
-
-                                gyro.Pitch = -(float)final.X;
-                                gyro.Yaw = -(float)final.Y;
-                                gyro.Roll = -(float)final.Z;
+                                Allign(direction, spaceship.gravity, gyro, control);
                             } else {
+                                Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
+                                quat.Conjugate();
+                                direction = quat * direction;
                                 Vector3.GetAzimuthAndElevation(direction, out azimuth, out elevation);
                                 Vector3 final = Vector3.Transform(new Vector3(elevation, azimuth, 0.0f),
                                     control.WorldMatrix.GetOrientation() * Matrix.Transpose(gyro.WorldMatrix.GetOrientation()));
 
-                                gyro.Pitch = -(float)final.X;
-                                gyro.Yaw = -(float)final.Y;
-                                gyro.Roll = -(float)final.Z;
+                                ApplyGyro(-final);
                             }
-
-
                         }
 
                         public void OnUpdateFrame() {
@@ -446,6 +509,7 @@ namespace IngameScript {
 
                         public void Enable() {
                             gyro.GyroOverride = true;
+                            
                         }
 
                         public void Disable() {
@@ -465,15 +529,7 @@ namespace IngameScript {
                             public float speed;
                             public SpaceshipFlags flags = 0;
 
-                            public static Waypoint FromGPS(string gps_text, float speed, SpaceshipFlags flags = SpaceshipFlags.Enroute) {
-                                string[] tokens = gps_text.Split(':');
-                                Waypoint wpt = new Waypoint();
-                                wpt.name = tokens[1];
-                                wpt.position = new Vector3D(double.Parse(tokens[2]), double.Parse(tokens[3]), double.Parse(tokens[4]));
-                                wpt.speed = speed;
-                                wpt.flags = flags;
-                                return wpt;
-                            }
+                            
 
                             public void Serialize(MemoryStream ms) {
                                 ms.Write(name);
@@ -550,13 +606,13 @@ namespace IngameScript {
                             double distance_between_wpts = Vector3D.Distance(prev.position, next.position);
                             double distance_from_prev = Vector3D.Distance(prev.position, position);
                             double distance_to_next = Vector3D.Distance(next.position, position);
-
+                            float arrival_dist = effective_breaking_distance;
                             p = Math.Max(0.0, Math.Min(1.0, distance_from_prev / distance_between_wpts));
-                            if (distance_between_wpts > Settings.ARRIVAL_DIST) {
-                                if (distance_to_next > Settings.ARRIVAL_DIST)
+                            if (distance_between_wpts > arrival_dist) {
+                                if (distance_to_next > arrival_dist)
                                     target_speed = Settings.MAX_SPEED;
                                 else
-                                    target_speed = Remap(distance_to_next, Settings.ARRIVAL_DIST, 0.0, Settings.MAX_SPEED, next.speed);
+                                    target_speed = Remap(distance_to_next, arrival_dist, 0.0, Settings.MAX_SPEED, next.speed);
                             } else {
                                 target_speed = (prev.speed * (1.0f - p) + next.speed * p);
                             }
@@ -586,10 +642,12 @@ namespace IngameScript {
                             if (active_waypoint < flightplan.waypoints.Count()) {
                                 next = active_waypoint;
                             }
+
                         }
 
                         public void StartFlight() {
-                            NextWaypoint();
+              
+                    NextWaypoint();
                         }
 
                         public void Enable() {
@@ -630,7 +688,7 @@ namespace IngameScript {
                         public CollisionAvoidanceSystem(Spaceship spaceship) {
                             this.spaceship = spaceship;
 
-                            foreach (IMyCameraBlock camera in Program.FindBlocksOfType<IMyCameraBlock>(spaceship.system, spaceship)) {
+                            foreach (IMyCameraBlock camera in Program.FindBlocksOfType<IMyCameraBlock>(spaceship.system, spaceship, true)) {
                                 sensors.Add(new Sensor(camera));
                             }
                         }
@@ -664,7 +722,7 @@ namespace IngameScript {
                     }
                     public class Sensor : ISpaceshipComponent {
                         static Vector2[] angles = {
-                        new Vector2(0, 0), new Vector2(30, 30), new Vector2(-30, -30), new Vector2(30, -30), new Vector2(-30, 30)
+                        new Vector2(0, 0), new Vector2(1, 1), new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1)
                     };
 
                         Vector3D[] detected = new Vector3D[angles.Length];
@@ -680,7 +738,7 @@ namespace IngameScript {
 
                         private void CastRay() {
                             if (camera.AvailableScanRange > range) {
-                                MyDetectedEntityInfo info = camera.Raycast(range, angles[next_angle].X, angles[next_angle].Y);
+                                MyDetectedEntityInfo info = camera.Raycast(range, angles[next_angle].X * Settings.SCAN_ANGLE, angles[next_angle].Y * Settings.SCAN_ANGLE);
 
                                 if (!info.IsEmpty()) {
                                     detected[next_angle] = info.HitPosition.Value;
@@ -728,7 +786,18 @@ namespace IngameScript {
                         public MatrixD matrix;
                         public float size;
 
-                        public void Serialize(MemoryStream ms) {
+                        public static Destination FromGPS(string gps_text) {
+                            string[] tokens = gps_text.Split(':');
+                            Destination destination = new Destination();
+                            destination.id = 0;
+                            destination.name = tokens[1];
+                            destination.matrix = MatrixD.Identity;
+                            destination.matrix.Translation = new Vector3D(double.Parse(tokens[2]), double.Parse(tokens[3]), double.Parse(tokens[4]));
+                            destination.size = 2.5f;
+                            return destination;
+                        }
+
+                public void Serialize(MemoryStream ms) {
                             ms.Write(id);
                             ms.Write(name);
                             ms.Write(matrix);
@@ -766,6 +835,11 @@ namespace IngameScript {
                             public void Deserialize(MemoryStream ms) {
                                 int t; ms.ReadInt(out t); type = (TaskType)t;
                                 ms.ReadLong(out destination);
+                            }
+
+                        public override string ToString() {
+                            return string.Format("[{0}]{1}",
+                                type.ToString(), destination != 0 ? spaceship.destinations[destination].ToString() : "No Destination");
                             }
                         }
     
@@ -856,6 +930,9 @@ namespace IngameScript {
                                 tasks.Add(task);
                             }
                             ms.ReadInt(out active_task);
+                            spaceship.debug.WriteText(active_task.ToString()+"\n");
+                            
+
                             int temp_state; ms.ReadInt(out temp_state); state = (TaskManagerState)temp_state;
                             int temp_next_state; ms.ReadInt(out temp_next_state); next_state = (TaskManagerState)temp_next_state;
                         }
@@ -976,6 +1053,8 @@ namespace IngameScript {
                             result += string.Join(" ", online_systems) + "\n";
                             result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
                             result += string.Format("Azimuth: {0:0.00}, Elevation: {1:0.00}\n", spaceship.autopilot.azimuth, spaceship.autopilot.elevation);
+                            result += string.Format("Task:{0}\nState: {1}\n", spaceship.tasks.active_task > -1 && spaceship.tasks.active_task < spaceship.tasks.tasks.Count ? spaceship.tasks.tasks[spaceship.tasks.active_task].ToString() : "", spaceship.tasks.state.ToString());
+                            result += string.Format("Breaking: {0:0.00}\n", effective_breaking_distance);
                             result += DrawTextProgressBar((float)spaceship.fd.p, 20) + "\n";
                             if (spaceship.fd.flightplan == null)
                                 return result;
@@ -1073,9 +1152,42 @@ namespace IngameScript {
                             }
                         }
                     }
+                    
+                    public class MenuSystem : MenuList {
+                        public MenuSystem() : base("System") {
+                            sub.Add(new Menu("Start Flightplan"));
+                        }
+
+                        public override bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args) {
+                            if (command == MenuCommand.Select) {
+                                if(index == 0) {
+                                    spaceship.tasks.active_task = 0;
+                                    spaceship.tasks.state = TaskManager.TaskManagerState.Navigation;
+                                    spaceship.tasks.next_state = TaskManager.TaskManagerState.Navigation;
+                                }
+                                return true;
+                            } else {
+                                return base.Interact(command, ref stack, args);
+                            }
+                        }
+                    }
+
+            public class MenuThrusters : MenuList {
+                public MenuThrusters() : base("Thrusters") {
+                    
+                }
+
+                public override string Draw() {
+                    sub.Clear();
+                    for (int i = 0; i < 6; i++)
+                        sub.Add(new Menu(string.Format("{0}: {1}", Enum.GetNames(typeof(ManagedThrusterDirectionType))[i], ThrustersManager.max_thrust[i])));
+                    return base.Draw();
+                }
+
+            }
             #endregion
 
-            
+
 
             #endregion
 
@@ -1085,26 +1197,26 @@ namespace IngameScript {
                 public IMyProgrammableBlock cpu;
                 public IMyRemoteControl control;
                 public IMyShipConnector connector;
-                public IMyCockpit cockpit;
-                public IMyTextSurface screen, debug;
+                public IMyTextSurface debug;
                 public IMyBroadcastListener listener;
 
                 public Dictionary<long, Destination> destinations = new Dictionary<long, Destination>();
 
-                public List<ThrusterManager> managers = new List<ThrusterManager>();
+                public static ThrustersManager thrusters;
                 public Autopilot autopilot;
                 public FlightDirector fd;
                 public CollisionAvoidanceSystem cas;
                 public TaskManager tasks = new TaskManager();
                 public MenuStack menu = new MenuStack(
                         new MenuList("Main Menu",
-                            new MenuFMC(), new MenuTasks())
+                            new MenuFMC(), new MenuTasks(), new MenuSystem(), new MenuThrusters())
                 );
 
                 public Vector3D velocity = Vector3D.Zero;
                 public Vector3D gravity = Vector3D.Zero;
                 public bool AtmosphericThrustersOnline = false;
-                public float effective_breaking_distance = 0.0f;
+                public static float effective_breaking_distance = 0.0f;
+                public static MyShipMass ship_mass;
                 public Vector3D desired = Vector3D.Zero;
                 private bool is_enabled = false;
                 public SpaceshipFlags flags = SpaceshipFlags.Dock;
@@ -1119,30 +1231,25 @@ namespace IngameScript {
 
                     control = FindBlockOfType<IMyRemoteControl>(system, this);
                     connector = FindBlockOfType<IMyShipConnector>(system, this);
-                    cockpit = FindBlockOfType<IMyCockpit>(system, this);
-
-                    screen = cockpit.GetSurface(0);
-                    debug = cockpit.GetSurface(1);
+                    debug = FindBlockOfType<IMyTextPanel>(system, this);
+                    debug.Font = "Monospace";
                     debug.ContentType = ContentType.TEXT_AND_IMAGE;
-
+                    
+                /*
+                    screen = cockpit.GetSurface(0);
                     screen.ContentType = ContentType.SCRIPT;
-
                     MySpriteDrawFrame frame = screen.DrawFrame();
+                
 
                     frame.Add(new MySprite(SpriteType.TEXTURE, "SquareSimple", new Vector2(0, 0), new Vector2(512, 512), Color.Black));
                     frame.Add(MySprite.CreateText("Ftiaxe Me!!!", "DEBUG", Color.White));
                     frame.Dispose();
+                */
 
                     listener = igc.RegisterBroadcastListener(Settings.COMM_CHANNEL);
                     listener = igc.RegisterBroadcastListener(Settings.COMM_CHANNEL);
                     listener.SetMessageCallback(Settings.COMM_CHANNEL);
-
-                    managers.Add(new ThrusterManager("LargeAtmosphericThrust", this, control, system, true));
-                    managers.Add(new ThrusterManager("SmallAtmosphericThrust", this, control, system, true));
-                    managers.Add(new ThrusterManager("LargeThrust", this, control, system));
-                    managers.Add(new ThrusterManager("SmallThrust", this, control, system));
-                    managers.Add(new ThrusterManager("LargeHydrogenThrust", this, control, system));
-                    managers.Add(new ThrusterManager("SmallHydrogenThrust", this, control, system));
+                    thrusters = new ThrustersManager(this, control, system);
 
                     autopilot = new Autopilot(this, control, FindBlockOfType<IMyGyro>(system, this));
                     cas = new CollisionAvoidanceSystem(this);
@@ -1181,7 +1288,8 @@ namespace IngameScript {
                         desired = Vector3D.Zero;
                         velocity = control.GetShipVelocities().LinearVelocity;
                         gravity = control.GetNaturalGravity();
-                        effective_breaking_distance = autopilot.CalculateEffectiveBreakingDistance(control.CalculateShipMass().TotalMass, (float)velocity.Length(), managers);
+                        ship_mass = control.CalculateShipMass();
+                        effective_breaking_distance = Settings.ARRIVAL_DIST * (ship_mass.TotalMass / ship_mass.BaseMass);
 
                         tasks.OnUpdateFrame();
 
@@ -1193,11 +1301,9 @@ namespace IngameScript {
                         if ((flags & SpaceshipFlags.AP) == SpaceshipFlags.AP) autopilot.OnUpdateFrame();
 
                         if ((flags & SpaceshipFlags.TM) == SpaceshipFlags.TM) {
-                            foreach (ThrusterManager manager in managers)
-                                manager.ApplyThrusters(autopilot.required_thrust);
+                            thrusters.OnUpdateFrame();
                         } else {
-                            foreach (ThrusterManager manager in managers)
-                                manager.Disable();
+                            thrusters.Disable();    
                         }
 
                         CheckConnector();
@@ -1211,18 +1317,16 @@ namespace IngameScript {
                     cas.Enable();
                     fd.Enable();
                     autopilot.Enable();
-                    foreach (ThrusterManager manager in managers)
-                        manager.Enable();
+                    thrusters.Enable();
+                    
                     control.DampenersOverride = false;
-                    tasks.active_task = 0;
-                    tasks.state = TaskManager.TaskManagerState.Navigation;
+
                 }
                 public void Disable() {
                     cas.Disable();
                     fd.Disable();
                     autopilot.Disable();
-                    foreach (ThrusterManager manager in managers)
-                        manager.Disable();
+                    thrusters.Disable();
                     is_enabled = false;
                     control.DampenersOverride = true;
                 }
@@ -1250,8 +1354,41 @@ namespace IngameScript {
                     fp.waypoints.Add(new Flightplan.Waypoint { name = "DCK", position = world_position, speed = Settings.DOCKING_SPEED, flags = SpaceshipFlags.Dock });
                     return fp;
                 }
+                
+                public void Go(string location) {
+                    foreach(Destination destination in destinations.Values)
+                        if (destination.name.ToLower() == location.ToLower()) {
+                            tasks.tasks.Clear();
+                            TaskManager.Task custom_task = new TaskManager.Task();
+                            custom_task.destination = destination.id;
+                            custom_task.type = TaskManager.TaskType.Navigation;
+                            tasks.tasks.Add(custom_task);
+                            tasks.active_task = 0;
+                            tasks.state = TaskManager.TaskManagerState.Navigation;
+                            tasks.next_state = TaskManager.TaskManagerState.Navigation;
+                            Enable();
+                            return;
+                        }
 
-                public void OnUpdateFrame(string argument, UpdateType updateSource) {
+                        Destination custom = Destination.FromGPS(location);
+                        custom.id = -981723;
+                        if (destinations.ContainsKey(custom.id))
+                            destinations[custom.id] = custom;
+                        else
+                            destinations.Add(custom.id, custom);
+
+                        tasks.tasks.Clear();
+                        TaskManager.Task task = new TaskManager.Task();
+                        task.destination = custom.id;
+                        task.type = TaskManager.TaskType.Navigation;
+                        tasks.tasks.Add(task);
+                        tasks.active_task = 0;
+                        tasks.state = TaskManager.TaskManagerState.Navigation;
+                        tasks.next_state = TaskManager.TaskManagerState.Navigation;
+                        Enable();
+                }
+
+                public void OnUpdateFrame(string[] arguments, UpdateType updateSource) {
                     if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
                         while (listener.HasPendingMessage) {
                             MyIGCMessage message = listener.AcceptMessage();
@@ -1268,14 +1405,17 @@ namespace IngameScript {
                     }
 
                     if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger) {
-                        HandleMenu(argument);
+                        HandleMenu(arguments[0]);
                     }
 
                     if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger || (updateSource & UpdateType.Terminal) == UpdateType.Terminal) {
-                        if (argument == "Enable")
+                        if (arguments[0] == "Enable")
                             Enable();
-                        else if (argument == "Disable")
+                        else if (arguments[0] == "Disable")
                             Disable();
+                        else if (arguments[0] == "Go" && arguments.Length == 2) {
+                            Go(arguments[1]);
+                        }
                     }
 
                     if ((updateSource & UpdateType.Update10) == UpdateType.Update10) {
@@ -1392,7 +1532,7 @@ namespace IngameScript {
 
         public void Main(string argument, UpdateType updateSource) {
             try {
-                spaceship.OnUpdateFrame(argument, updateSource);
+                spaceship.OnUpdateFrame(argument.Split(' ').ToArray(), updateSource);
             } catch (Exception ex) {
                 spaceship.debug.WriteText(ex.ToString(), true);
                 throw;
