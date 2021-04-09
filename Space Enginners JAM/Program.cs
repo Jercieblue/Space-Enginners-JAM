@@ -279,7 +279,7 @@ namespace IngameScript {
                         string ThrustersType;
                         List<IMyThrust> temp_thrusters = new List<IMyThrust>();
                         public List<ManagedThruster> thrusters = new List<ManagedThruster>();
-                        public bool IsAtmospheric;
+
                         Spaceship spaceship;
                         public float[] max_thrust = new float[6];
 
@@ -300,10 +300,9 @@ namespace IngameScript {
                                 return ManagedThrusterDirectionType.Invalid;
                         }
 
-                        public ThrusterManager(string ThrustersType, Spaceship spaceship, IMyRemoteControl control, IMyGridTerminalSystem GridTerminalSystem, bool is_atmospheric = false) {
+                        public ThrusterManager(string ThrustersType, Spaceship spaceship, IMyRemoteControl control, IMyGridTerminalSystem GridTerminalSystem) {
                             this.ThrustersType = ThrustersType;
                             this.spaceship = spaceship;
-                            this.IsAtmospheric = is_atmospheric;
                             ClearThrusters();
                             SetupThrusters(ThrustersType, control, GridTerminalSystem);
                         }
@@ -347,9 +346,6 @@ namespace IngameScript {
                                 } else {
                                     thruster.thruster.ThrustOverride = 0.0f;
                                 }
-
-                                if (IsAtmospheric)
-                                    spaceship.AtmosphericThrustersOnline = thrust_effectivness > Settings.MinThrustEffectivness;
 
                                 if (Settings.AutoStartThrusters) {
                                     if (thruster.thruster.ThrustOverride >= Settings.EPSILON && !thruster.thruster.Enabled)
@@ -398,8 +394,8 @@ namespace IngameScript {
                         public static float[] max_thrust = new float[6];
 
                         public ThrustersManager(Spaceship spaceship, IMyRemoteControl control, IMyGridTerminalSystem system) {
-                            managers.Add(new ThrusterManager("LargeAtmosphericThrust", spaceship, control, system, true));
-                            managers.Add(new ThrusterManager("SmallAtmosphericThrust", spaceship, control, system, true));
+                            managers.Add(new ThrusterManager("LargeAtmosphericThrust", spaceship, control, system));
+                            managers.Add(new ThrusterManager("SmallAtmosphericThrust", spaceship, control, system));
                             managers.Add(new ThrusterManager("LargeThrust", spaceship, control, system));
                             managers.Add(new ThrusterManager("SmallThrust", spaceship, control, system));
                             managers.Add(new ThrusterManager("LargeHydrogenThrust", spaceship, control, system));
@@ -481,7 +477,7 @@ namespace IngameScript {
                             }
 
                             Vector3 direction = Vector3D.Normalize(offet);
-                            if (spaceship.AtmosphericThrustersOnline && spaceship.gravity.LengthSquared() > 1e-1f) {
+                            if (spaceship.gravity.LengthSquared() > 1e-1f) {
                                 Allign(direction, spaceship.gravity, gyro, control);
                             } else {
                                 Quaternion quat = Quaternion.CreateFromForwardUp(control.WorldMatrix.Forward, control.WorldMatrix.Up);
@@ -617,7 +613,7 @@ namespace IngameScript {
                                 target_speed = (prev.speed * (1.0f - p) + next.speed * p);
                             }
                             Vector3DLimit(ref result, (float)target_speed);
-                            return result;
+                            return result.Length() > Settings.EPSILON ? result : Vector3D.Zero;
                         }
 
                         public void OnUpdateFrame() {
@@ -1051,17 +1047,14 @@ namespace IngameScript {
                             if ((spaceship.flags & SpaceshipFlags.LCK) == SpaceshipFlags.LCK) online_systems.Add("LCK");
                             if ((spaceship.flags & SpaceshipFlags.Alln) == SpaceshipFlags.Alln) online_systems.Add("ALN");
                             result += string.Join(" ", online_systems) + "\n";
-                            result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
-                            result += string.Format("Azimuth: {0:0.00}, Elevation: {1:0.00}\n", spaceship.autopilot.azimuth, spaceship.autopilot.elevation);
                             result += string.Format("Task:{0}\nState: {1}\n", spaceship.tasks.active_task > -1 && spaceship.tasks.active_task < spaceship.tasks.tasks.Count ? spaceship.tasks.tasks[spaceship.tasks.active_task].ToString() : "", spaceship.tasks.state.ToString());
-                            result += string.Format("Breaking: {0:0.00}\n", effective_breaking_distance);
+                            if (spaceship.fd.flightplan != null) {
+                                for (int i = 0; i < spaceship.fd.flightplan.waypoints.Count(); i++)
+                                    result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "╔" : i == spaceship.fd.next ? "╚" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
+                            }
+                            result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
                             result += DrawTextProgressBar((float)spaceship.fd.p, 20) + "\n";
-                            if (spaceship.fd.flightplan == null)
-                                return result;
-
-                            for (int i = 0; i < spaceship.fd.flightplan.waypoints.Count(); i++)
-                                result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "╔" : i == spaceship.fd.next ? "╚" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
-
+                            result += string.Format("Breaking: {0:0.00}\n", effective_breaking_distance);
                             return result;
                         }
                     }
@@ -1214,7 +1207,7 @@ namespace IngameScript {
 
                 public Vector3D velocity = Vector3D.Zero;
                 public Vector3D gravity = Vector3D.Zero;
-                public bool AtmosphericThrustersOnline = false;
+         
                 public static float effective_breaking_distance = 0.0f;
                 public static MyShipMass ship_mass;
                 public Vector3D desired = Vector3D.Zero;
@@ -1354,7 +1347,6 @@ namespace IngameScript {
                     fp.waypoints.Add(new Flightplan.Waypoint { name = "DCK", position = world_position, speed = Settings.DOCKING_SPEED, flags = SpaceshipFlags.Dock });
                     return fp;
                 }
-                
                 public void Go(string location) {
                     foreach(Destination destination in destinations.Values)
                         if (destination.name.ToLower() == location.ToLower()) {
