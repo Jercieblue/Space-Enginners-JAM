@@ -58,6 +58,7 @@
     <Compile Include="Destination.cs" />
     <Compile Include="FlightDirector.cs" />
     <Compile Include="Flightplan.cs" />
+    <Compile Include="HelperFuncs.cs" />
     <Compile Include="MDK\Bootstrapper.cs" />
     <AdditionalFiles Include="MDK\MDK.options.props">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

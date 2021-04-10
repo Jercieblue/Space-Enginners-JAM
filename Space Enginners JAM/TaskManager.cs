@@ -61,7 +61,7 @@ namespace IngameScript {
                                 case TaskType.Navigation:
                                     break;
                                 case TaskType.Load: {
-                                        List<IMyCargoContainer> containers = FindBlocksOfType<IMyCargoContainer>(spaceship.system, spaceship, true);
+                                        List<IMyCargoContainer> containers = FindBlocksOfType<IMyCargoContainer>(spaceship.system, spaceship, Settings.TAG);
                                         bool all_are_full = true;
                                         foreach (IMyCargoContainer container in containers)
                                             if (!container.GetInventory().IsFull)
@@ -72,7 +72,7 @@ namespace IngameScript {
                                     }
                                     break;
                                 case TaskType.Unload: {
-                                        List<IMyCargoContainer> containers = FindBlocksOfType<IMyCargoContainer>(spaceship.system, spaceship, true);
+                                        List<IMyCargoContainer> containers = FindBlocksOfType<IMyCargoContainer>(spaceship.system, spaceship, Settings.TAG);
                                         bool all_are_empty = true;
                                         foreach (IMyCargoContainer container in containers)
                                             if (container.GetInventory().CurrentVolume > 0)

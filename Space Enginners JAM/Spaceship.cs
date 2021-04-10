@@ -64,11 +64,11 @@ namespace IngameScript {
 
                 cpu = FindRunningPB(system);
 
-                control = FindBlockOfType<IMyRemoteControl>(system, this);
-                connector = FindBlockOfType<IMyShipConnector>(system, this);
-                debug = FindBlockOfType<IMyTextPanel>(system, this);
+                control = FindBlockOfType<IMyRemoteControl>(system, this, Settings.TAG);
+                connector = FindBlockOfType<IMyShipConnector>(system, this, Settings.TAG);
+                debug = FindBlockOfType<IMyTextPanel>(system, this, Settings.TAG);
                 if(debug == null) {
-                    IMyCockpit cockpit = FindBlockOfType<IMyCockpit>(system, this);
+                    IMyCockpit cockpit = FindBlockOfType<IMyCockpit>(system, this, Settings.TAG);
                     if(cockpit.SurfaceCount > 0)
                         debug = cockpit.GetSurface(0);
                 }

@@ -74,7 +74,7 @@ namespace IngameScript {
             public const bool AutoStartThrusters = true;
             public const float CASDistanceExtension = 1.0f;
             public const float MinRayDist = 0.0f;
-            public const float MinThrustEffectivness = 0.30f; // When the effectivness of the thruster drops below gets deactivated
+            public const float MinThrustEffectivness = 0.05f; // When the effectivness of the thruster drops below gets deactivated
             public const float ApproachHeight = 100.0f;
             public const float APPROACH_SPEED = 5.0f;
             public const float DEPARTURE_SPEED = 10.0f;
@@ -82,7 +82,6 @@ namespace IngameScript {
             public const float MAX_SPEED = 95.0f;
             public const float ARRIVAL_DIST = 1000.0f;
             public const float MIN_CHECK_DIST = 1e-1f;
-            public const float MAX_SCAN_DIST = 500.0f;  // The max scan range for the radar to avoid obsticles
             public const float SCAN_ANGLE = 15.0f;
             public const string COMM_CHANNEL = "JAM_CH_1";
             public const float EPSILON = 1e-3f;
@@ -95,33 +94,7 @@ namespace IngameScript {
         public static Spaceship spaceship;
 
         #region Diafores Xazomares
-            public static T FindBlockOfType<T>(IMyGridTerminalSystem system, Spaceship spaceship, bool use_tag = false) where T : class {
-                List<T> temp = new List<T>();
-                system.GetBlocksOfType<T>(temp);
-                foreach (T block in temp) {
-                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Settings.TAG))))
-                        return (T)block;
-                }
-                return default(T);
-            }
-            public static List<T> FindBlocksOfType<T>(IMyGridTerminalSystem system, Spaceship spaceship, bool use_tag = false) where T : class {
-                List<T> temp = new List<T>();
-                List<T> result = new List<T>();
-                system.GetBlocksOfType<T>(temp);
-                foreach (T block in temp) {
-                    if ((spaceship.cpu.CubeGrid == ((IMyTerminalBlock)block).CubeGrid) && ((!use_tag) || (use_tag && ((IMyTerminalBlock)block).CustomName.Contains(Settings.TAG))))
-                        result.Add(block);
-                }
-                return result;
-            }
-            public static IMyProgrammableBlock FindRunningPB(IMyGridTerminalSystem system) {
-                List<IMyProgrammableBlock> blocks = new List<IMyProgrammableBlock>();
-                system.GetBlocksOfType<IMyProgrammableBlock>(blocks);
-                foreach (IMyProgrammableBlock block in blocks)
-                    if (block.IsRunning)
-                        return block;
-                return null;
-            }
+            
         #endregion
 
         public Program() {

@@ -80,14 +80,14 @@ namespace IngameScript {
                 public CollisionAvoidanceSystem(Spaceship spaceship) {
                     this.spaceship = spaceship;
 
-                    foreach (IMyCameraBlock camera in Program.FindBlocksOfType<IMyCameraBlock>(spaceship.system, spaceship, true)) {
+                    foreach (IMyCameraBlock camera in FindBlocksOfType<IMyCameraBlock>(spaceship.system, spaceship, Settings.TAG)) {
                         sensors.Add(new Sensor(camera));
                     }
                 }
 
                 public void OnUpdateFrame() {
                     foreach (Sensor sensor in sensors) {
-                        sensor.range = Math.Max(Settings.MinRayDist, Settings.MAX_SCAN_DIST * ((float)spaceship.velocity.Length() / 100.0f));
+                        sensor.range = effective_breaking_distance * ((float)spaceship.velocity.Length() / Settings.MAX_SPEED);
                         sensor.OnUpdateFrame();
                         spaceship.desired += -sensor.direction * (1.0f - sensor.value) * Settings.MAX_SPEED;
                     }

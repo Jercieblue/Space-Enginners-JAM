@@ -52,7 +52,7 @@ namespace IngameScript {
 
                 public void LookAt(Vector3D target, IMyGyro gyro, IMyRemoteControl control) {
                     Vector3D offet = (target - control.GetPosition());
-                    if (offet.Length() < 10.0f) {
+                    if (offet.Length() < 100.0f) {
                         ApplyGyro(Vector3.Zero);
                         return;
                     }

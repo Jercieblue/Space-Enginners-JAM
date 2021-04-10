@@ -15,7 +15,6 @@ namespace IngameScript {
             }
             public class ThrusterManager : ISpaceshipComponent {
                 string ThrustersType;
-                List<IMyThrust> temp_thrusters = new List<IMyThrust>();
                 public List<ManagedThruster> thrusters = new List<ManagedThruster>();
 
                 Spaceship spaceship;
@@ -49,11 +48,10 @@ namespace IngameScript {
                     thrusters.Clear();
                 }
 
-                public void SetupThrusters(string ThrustersType, IMyRemoteControl control, IMyGridTerminalSystem GridTerminalSystem) {
-                    GridTerminalSystem.GetBlocksOfType<IMyThrust>(temp_thrusters);
+                public void SetupThrusters(string ThrustersType, IMyRemoteControl control, IMyGridTerminalSystem system) {
                     int[] thrusters_per_direction = new int[6];
 
-                    foreach (IMyThrust thruster in temp_thrusters) {
+                    foreach (IMyThrust thruster in FindBlocksOfType<IMyThrust>(system, spaceship)) {
                         if (thruster.CubeGrid == spaceship.cpu.CubeGrid && thruster.BlockDefinition.SubtypeName.Contains(ThrustersType)) {
                             ManagedThruster managed = new ManagedThruster();
 
