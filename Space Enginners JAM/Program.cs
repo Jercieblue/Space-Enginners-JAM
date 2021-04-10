@@ -139,7 +139,7 @@ namespace IngameScript {
                 }
             } catch (Exception ex) {
                 spaceship.debug.WriteText(ex.ToString(), true);
-                throw;
+
             }
         }
 

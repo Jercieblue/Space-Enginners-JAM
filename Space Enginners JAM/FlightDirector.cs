@@ -30,7 +30,7 @@ namespace IngameScript {
                 public Vector3D Enroute(Flightplan.Waypoint prev, Flightplan.Waypoint next, Vector3D position, Vector3D velocity) {
                     Vector3D to_spaceship = position - prev.position;
                     Vector3D to_nextwpt = next.position - prev.position;
-                    Vector3D position_on_route = Vector3D.ProjectOnVector(ref to_spaceship, ref to_nextwpt);
+                    //Vector3D position_on_route = Vector3D.ProjectOnVector(ref to_spaceship, ref to_nextwpt);
                     Vector3D result = next.position - position;
                     //result += position_on_route - position;
                     
@@ -45,7 +45,7 @@ namespace IngameScript {
                         else
                             target_speed = Remap(distance_to_next, arrival_dist, 0.0, Settings.MAX_SPEED, next.speed);
                     } else {
-                        target_speed = (prev.speed * (1.0f - p) + next.speed * p);
+                        target_speed = Lerp(prev.speed, next.speed, p);
                     }
                     Vector3DLimit(ref result, (float)target_speed);
                     return result.Length() > Settings.EPSILON ? result : Vector3D.Zero;

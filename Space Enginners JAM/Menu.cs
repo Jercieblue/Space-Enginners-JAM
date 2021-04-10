@@ -7,8 +7,13 @@ namespace IngameScript {
         public partial class Spaceship {
 
             public enum MenuCommand {
-                Prev, Next, Select, Return, Insert, Delete
+                Prev, Next, Select, Return, Insert, Delete, Invalid
             }
+            public static Dictionary<string, MenuCommand> StringCommandsToMenuLookUp = new Dictionary<string, MenuCommand> {
+                {"Prev", MenuCommand.Prev }, {"Next",MenuCommand.Next }, {"Select", MenuCommand.Select}, {"Return", MenuCommand.Return}, 
+                {"Insert", MenuCommand.Insert}, {"Delete", MenuCommand.Delete}
+            };
+
             public interface IMenu {
                 string Draw();
                 bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args);
@@ -118,7 +123,7 @@ namespace IngameScript {
                     if ((spaceship.flags & SpaceshipFlags.LCK) == SpaceshipFlags.LCK) online_systems.Add("LCK");
                     if ((spaceship.flags & SpaceshipFlags.Alln) == SpaceshipFlags.Alln) online_systems.Add("ALN");
                     result += string.Join(" ", online_systems) + "\n";
-                    result += string.Format("Task:{0}\nState: {1}\n", spaceship.tasks.active_task > -1 && spaceship.tasks.active_task < spaceship.tasks.tasks.Count ? spaceship.tasks.tasks[spaceship.tasks.active_task].ToString() : "", spaceship.tasks.state.ToString());
+                    result += string.Format("Task:{0}\nState: {1}\n", spaceship.tasks.active_task > -1 && spaceship.tasks.active_task < spaceship.tasks.tasks.Count ? spaceship.tasks.tasks[spaceship.tasks.active_task].ToString() : "", TaskManager.TaskManagerStringStates2[(int)spaceship.tasks.state]);
                     if (spaceship.fd.flightplan != null) {
                         for (int i = 0; i < spaceship.fd.flightplan.waypoints.Count(); i++)
                             result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "╔" : i == spaceship.fd.next ? "╚" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
@@ -161,7 +166,7 @@ namespace IngameScript {
 
                     void UpdateMenu() {
                         sub.Clear();
-                        sub.Add(new Menu("Task: " + task.type.ToString()));
+                        sub.Add(new Menu("Task: " + TaskManager.TaskStringTypes[task.type]));
                         sub.Add(new Menu("Destination: " + (task.destination != 0 ? spaceship.destinations[task.destination].ToString() : "No Destination")));
                     }
 
@@ -177,7 +182,7 @@ namespace IngameScript {
                     public override bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args) {
                         if (command == MenuCommand.Select) {
                             if (index == 0) {
-                                task.type = (TaskManager.TaskType)((int)++task.type % (int)TaskManager.TaskType.Total);
+                                task.type = (task.type + 1) % TaskManager.TaskStringTypes.Length;
                             } else if (index == 1) {
                                 stack.Push(new MenuDestinationPicker(task));
                             }
@@ -188,7 +193,7 @@ namespace IngameScript {
                     }
 
                     public override string ToString() {
-                        return string.Format("({0}){1}", task.type, task.destination != 0 ? spaceship.destinations[task.destination].ToString() : "No Destination");
+                        return string.Format("({0}){1}", TaskManager.TaskStringTypes[task.type], task.destination != 0 ? spaceship.destinations[task.destination].ToString() : "No Destination");
                     }
                 }
 

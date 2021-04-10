@@ -67,6 +67,11 @@ namespace IngameScript {
                 control = FindBlockOfType<IMyRemoteControl>(system, this);
                 connector = FindBlockOfType<IMyShipConnector>(system, this);
                 debug = FindBlockOfType<IMyTextPanel>(system, this);
+                if(debug == null) {
+                    IMyCockpit cockpit = FindBlockOfType<IMyCockpit>(system, this);
+                    if(cockpit.SurfaceCount > 0)
+                        debug = cockpit.GetSurface(0);
+                }
                 debug.Font = "Monospace";
                 debug.ContentType = ContentType.TEXT_AND_IMAGE;
                     
@@ -118,6 +123,10 @@ namespace IngameScript {
             public static double Remap(double value, double low1, double high1, double low2, double high2) {
                 return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
             }
+
+            public static double Lerp(double left, double right, double amount) {
+                return left + (right - left) * amount;
+            }
             public void OnFlightUpdateFrame() {
                 if (is_enabled) {
                     desired = Vector3D.Zero;
@@ -165,9 +174,20 @@ namespace IngameScript {
                 is_enabled = false;
                 control.DampenersOverride = true;
             }
+            
+            public static bool ParseCommand(string value, out MenuCommand result) {
+                if (StringCommandsToMenuLookUp.ContainsKey(value)) {
+                    result = StringCommandsToMenuLookUp[value];
+                    return true;
+                } else {
+                    result = MenuCommand.Invalid;
+                    return false;
+                }
+            }
+
             public void HandleMenu(string argument) {
                 MenuCommand command;
-                if (Enum.TryParse(argument, out command)) {
+                if (ParseCommand(argument, out command)) {
                     menu.Interact(command);
                 }
             }
@@ -195,7 +215,7 @@ namespace IngameScript {
                         tasks.tasks.Clear();
                         TaskManager.Task custom_task = new TaskManager.Task();
                         custom_task.destination = destination.id;
-                        custom_task.type = TaskManager.TaskType.Navigation;
+                        custom_task.type = 0;
                         tasks.tasks.Add(custom_task);
                         tasks.active_task = 0;
                         tasks.state = TaskManager.TaskManagerState.Navigation;
@@ -214,7 +234,7 @@ namespace IngameScript {
                     tasks.tasks.Clear();
                     TaskManager.Task task = new TaskManager.Task();
                     task.destination = custom.id;
-                    task.type = TaskManager.TaskType.Navigation;
+                    task.type = 0;
                     tasks.tasks.Add(task);
                     tasks.active_task = 0;
                     tasks.state = TaskManager.TaskManagerState.Navigation;

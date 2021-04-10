@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using System;
 using System.Collections.Generic;
 
 namespace IngameScript {
@@ -10,27 +9,28 @@ namespace IngameScript {
                 public enum TaskType {
                     Navigation, Load, Unload, Charge, Repeat, Total
                 }
-
+                public static string[] TaskStringTypes = { "Navigation", "Load", "Unload", "Charge", "Repeat", "Total" };
+                public static string[] TaskManagerStringStates2 = { "Navigation", "Travelling", "Action", "NextTask" };
                 public enum TaskManagerState {
                     Navigation, Travelling, Action, NextTask
                 }
                 public class Task : ISerializable {
-                    public TaskType type = TaskType.Navigation;
+                    public int type = 0;
                     public long destination = 0;
 
                     public void Serialize(MemoryStream ms) {
-                        ms.Write((int)type);
+                        ms.Write(type);
                         ms.Write(destination);
                     }
 
                     public void Deserialize(MemoryStream ms) {
-                        int t; ms.ReadInt(out t); type = (TaskType)t;
+                        int t; ms.ReadInt(out t); type = t;
                         ms.ReadLong(out destination);
                     }
 
                 public override string ToString() {
                     return string.Format("[{0}]{1}",
-                        type.ToString(), destination != 0 ? spaceship.destinations[destination].ToString() : "No Destination");
+                        TaskManager.TaskStringTypes[type], destination != 0 ? spaceship.destinations[destination].ToString() : "No Destination");
                     }
                 }
     
@@ -57,7 +57,7 @@ namespace IngameScript {
                             }
                             break;
                         case TaskManagerState.Action:
-                            switch (tasks[active_task].type) {
+                            switch ((TaskType)tasks[active_task].type) {
                                 case TaskType.Navigation:
                                     break;
                                 case TaskType.Load: {

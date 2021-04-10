@@ -1,7 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using VRageMath;
 
-
 namespace IngameScript {
     partial class Program {
        
@@ -95,7 +94,6 @@ namespace IngameScript {
                     ApplyGyro(Vector3.Zero);
                 }
             }
-
         }
     }
 }
