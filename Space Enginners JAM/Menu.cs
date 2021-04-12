@@ -41,7 +41,8 @@ namespace IngameScript {
             }
             public class MenuList : Menu {
                 public List<Menu> sub;
-                public int index = 0;
+                public int begin = 0,end = 0, index = 0;
+                public int extents = 2;
 
                 public MenuList(string name, params Menu[] sub_menu) : base(name) {
                     sub = sub_menu.ToList();
@@ -49,7 +50,9 @@ namespace IngameScript {
 
                 public override string Draw() {
                     string result = base.Draw();
-                    for (int i = 0; i < sub.Count; i++)
+                    begin = Math.Max(0,  index - extents);
+                    end = Math.Min(sub.Count(), begin + 2 * extents + 1);
+                    for (int i = begin; i < end; i++)
                         result += string.Format("{0} {1}\n", i == index ? ">" : " ", sub[i].ToString());
                     return result;
                 }
@@ -136,7 +139,7 @@ namespace IngameScript {
             }
             public class MenuDestinationPicker : MenuList {
                 TaskManager.Task task;
-
+                public string folder = "";
                 public MenuDestinationPicker(TaskManager.Task task) : base("Destinations") {
                     this.task = task;
                 }
@@ -225,6 +228,7 @@ namespace IngameScript {
             public class MenuSystem : MenuList {
                 public MenuSystem() : base("System") {
                     sub.Add(new Menu("Start Flightplan"));
+                    sub.Add(new Menu("Next Task"));
                 }
 
                 public override bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args) {
@@ -232,7 +236,11 @@ namespace IngameScript {
                         if (index == 0) {
                             spaceship.tasks.active_task = 0;
                             spaceship.tasks.state = TaskManager.TaskManagerState.Navigation;
-                            spaceship.tasks.next_state = TaskManager.TaskManagerState.Navigation;
+                            spaceship.tasks.next_state = spaceship.tasks.state;
+                        } else if (index == 1) {
+                            spaceship.tasks.active_task = (spaceship.tasks.active_task + 1) % spaceship.tasks.tasks.Count;
+                            spaceship.tasks.state = TaskManager.TaskManagerState.Navigation;
+                            spaceship.tasks.next_state = spaceship.tasks.state;
                         }
                         return true;
                     } else {
