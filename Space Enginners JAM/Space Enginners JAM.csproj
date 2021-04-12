@@ -68,6 +68,7 @@
     </AdditionalFiles>
     <Compile Include="MemoryStream.cs" />
     <Compile Include="Menu.cs" />
+    <Compile Include="PowerManager.cs" />
     <Compile Include="Program.cs" />
     <AdditionalFiles Include="Instructions.readme" />
     <AdditionalFiles Include="thumb.png" />

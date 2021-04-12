@@ -44,9 +44,11 @@ namespace IngameScript {
             public FlightDirector fd;
             public CollisionAvoidanceSystem cas;
             public TaskManager tasks = new TaskManager();
+            public PowerManager power = new PowerManager();
+
             public MenuStack menu = new MenuStack(
                     new MenuList("Main Menu",
-                        new MenuFMC(), new MenuTasks(), new MenuSystem(), new MenuThrusters())
+                        new MenuFMC(), new MenuTasks(), new MenuSystem(), new MenuThrusters(), new MenuInfo())
             );
 
             public Vector3D velocity = Vector3D.Zero;
@@ -241,6 +243,11 @@ namespace IngameScript {
                     tasks.next_state = TaskManager.TaskManagerState.Navigation;
                     Enable();
             }
+
+            public void OnUpdateInfoFrame() {
+                power.OnUpdateFrame();
+            }
+
             public void OnUpdateFrame(string[] arguments, UpdateType updateSource) {
                 if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
                     while (listener.HasPendingMessage) {
@@ -274,7 +281,7 @@ namespace IngameScript {
                 if ((updateSource & UpdateType.Update10) == UpdateType.Update10) {
                     OnFlightUpdateFrame();
                 }
-
+                OnUpdateInfoFrame();
                 debug.WriteText(menu.Draw(this));
                     
             }

@@ -109,7 +109,7 @@ namespace IngameScript {
                         if (i < iv)
                             result += "▓";
                         else
-                            result += "░";
+                            result += " ";
 
                     return result;
                 }
@@ -263,6 +263,17 @@ namespace IngameScript {
 
             }
 
+            public class MenuInfo : Menu {
+                public MenuInfo() : base("Info") {
+
+                }
+
+                public override string Draw() {
+                    string result = base.Draw();
+                    result += string.Format("Batteries: {0}%", spaceship.power.baterries * 100.0f);
+                    return result;
+                }
+            }
         }
     }
 }
