@@ -45,6 +45,7 @@ namespace IngameScript {
             public CollisionAvoidanceSystem cas;
             public TaskManager tasks = new TaskManager();
             public PowerManager power = new PowerManager();
+            public Commands commands = new Commands();
 
             public MenuStack menu = new MenuStack(
                     new MenuList("Main Menu",
@@ -178,8 +179,8 @@ namespace IngameScript {
             }
             
             public static bool ParseCommand(string value, out MenuCommand result) {
-                if (StringCommandsToMenuLookUp.ContainsKey(value)) {
-                    result = StringCommandsToMenuLookUp[value];
+                if (StringCommandsToMenuLookUp.ContainsKey(value.ToLower())) {
+                    result = StringCommandsToMenuLookUp[value.ToLower()];
                     return true;
                 } else {
                     result = MenuCommand.Invalid;
@@ -248,7 +249,7 @@ namespace IngameScript {
                 power.OnUpdateFrame();
             }
 
-            public void OnUpdateFrame(string[] arguments, UpdateType updateSource) {
+            public void OnUpdateFrame(string arguments, UpdateType updateSource) {
                 if ((updateSource & UpdateType.IGC) == UpdateType.IGC) {
                     while (listener.HasPendingMessage) {
                         MyIGCMessage message = listener.AcceptMessage();
@@ -265,17 +266,11 @@ namespace IngameScript {
                 }
 
                 if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger) {
-                    HandleMenu(arguments[0]);
+                    HandleMenu(arguments);
                 }
 
                 if ((updateSource & UpdateType.Trigger) == UpdateType.Trigger || (updateSource & UpdateType.Terminal) == UpdateType.Terminal) {
-                    if (arguments[0] == "Enable")
-                        Enable();
-                    else if (arguments[0] == "Disable")
-                        Disable();
-                    else if (arguments[0] == "Go" && arguments.Length == 2) {
-                        Go(arguments[1]);
-                    }
+                    commands.Execute(arguments);
                 }
 
                 if ((updateSource & UpdateType.Update10) == UpdateType.Update10) {

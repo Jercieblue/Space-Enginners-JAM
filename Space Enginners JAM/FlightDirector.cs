@@ -77,8 +77,17 @@ namespace IngameScript {
                 }
 
                 public void StartFlight() {
-              
-            NextWaypoint();
+                    NextWaypoint();
+                }
+
+                public TimeSpan CalculateETA() {
+                    double speed = spaceship.velocity.Length();
+                    if (speed > Settings.EPSILON && flightplan != null && next < flightplan.waypoints.Count()) {
+                        double dist = Vector3D.Distance(spaceship.GetPosition(), flightplan.waypoints[next].position);
+                        return new TimeSpan(0, 0, (int)Math.Round(dist / speed));
+                    } else {
+                        return new TimeSpan(0, 0, 0);
+                    }
                 }
 
                 public void Enable() {

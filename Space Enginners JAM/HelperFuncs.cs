@@ -36,6 +36,20 @@ namespace IngameScript {
                     return block;
             return null;
         }
+
+        public static string DrawTextProgressBar(float v, int size = 6) {
+            string result = "";
+            int inner_size = size - 2;
+            int iv = (int)Math.Round(v * inner_size);
+            result += "[";
+            for (int i = 0; i < inner_size; i++)
+                if (i < iv)
+                    result += "■";
+                else
+                    result += " ";
+            result += "]";
+            return result;
+        }
     }
     
 }

@@ -10,8 +10,8 @@ namespace IngameScript {
                 Prev, Next, Select, Return, Insert, Delete, Invalid
             }
             public static Dictionary<string, MenuCommand> StringCommandsToMenuLookUp = new Dictionary<string, MenuCommand> {
-                {"Prev", MenuCommand.Prev }, {"Next",MenuCommand.Next }, {"Select", MenuCommand.Select}, {"Return", MenuCommand.Return}, 
-                {"Insert", MenuCommand.Insert}, {"Delete", MenuCommand.Delete}
+                {"prev", MenuCommand.Prev }, {"next",MenuCommand.Next }, {"select", MenuCommand.Select}, {"return", MenuCommand.Return}, 
+                {"insert", MenuCommand.Insert}, {"delete", MenuCommand.Delete}
             };
 
             public interface IMenu {
@@ -42,7 +42,7 @@ namespace IngameScript {
             public class MenuList : Menu {
                 public List<Menu> sub;
                 public int begin = 0,end = 0, index = 0;
-                public int extents = 2;
+                public int extents = Settings.LIST_EXTENTS;
 
                 public MenuList(string name, params Menu[] sub_menu) : base(name) {
                     sub = sub_menu.ToList();
@@ -102,17 +102,7 @@ namespace IngameScript {
 
                 }
 
-                public string DrawTextProgressBar(float v, int size) {
-                    string result = "";
-                    int iv = (int)Math.Round(v * size);
-                    for (int i = 0; i < size; i++)
-                        if (i < iv)
-                            result += "▓";
-                        else
-                            result += " ";
-
-                    return result;
-                }
+                
 
                 public override string Draw() {
                     string result = base.Draw();
@@ -131,9 +121,10 @@ namespace IngameScript {
                         for (int i = 0; i < spaceship.fd.flightplan.waypoints.Count(); i++)
                             result += string.Format("{0}{1} ({2})\n", i == spaceship.fd.prev ? "╔" : i == spaceship.fd.next ? "╚" : " ", spaceship.fd.flightplan.waypoints[i].name, spaceship.fd.flightplan.waypoints[i].speed);
                     }
-                    result += string.Format("{0:0.00}%, Speed: {1}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
+                    result += string.Format("{0:0.00}%, Speed: {1:0.00}\n", spaceship.fd.p * 100, spaceship.fd.target_speed);
                     result += DrawTextProgressBar((float)spaceship.fd.p, 20) + "\n";
                     result += string.Format("Breaking: {0:0.00}\n", effective_breaking_distance);
+                    result += string.Format("ETA: {0}\n", spaceship.fd.CalculateETA());
                     return result;
                 }
             }
@@ -227,22 +218,15 @@ namespace IngameScript {
 
             public class MenuSystem : MenuList {
                 public MenuSystem() : base("System") {
-                    sub.Add(new Menu("Start Flightplan"));
+                    sub.Add(new Menu("Start"));
+                    sub.Add(new Menu("Reset Flightplan"));
                     sub.Add(new Menu("Next Task"));
+                    sub.Add(new Menu("Stop"));
                 }
 
                 public override bool Interact(MenuCommand command, ref Stack<IMenu> stack, params string[] args) {
                     if (command == MenuCommand.Select) {
-                        if (index == 0) {
-                            spaceship.tasks.active_task = 0;
-                            spaceship.tasks.state = TaskManager.TaskManagerState.Navigation;
-                            spaceship.tasks.next_state = spaceship.tasks.state;
-                        } else if (index == 1) {
-                            spaceship.tasks.active_task = (spaceship.tasks.active_task + 1) % spaceship.tasks.tasks.Count;
-                            spaceship.tasks.state = TaskManager.TaskManagerState.Navigation;
-                            spaceship.tasks.next_state = spaceship.tasks.state;
-                        }
-                        return true;
+                        return spaceship.commands.Execute(sub[index].name);
                     } else {
                         return base.Interact(command, ref stack, args);
                     }
@@ -270,7 +254,7 @@ namespace IngameScript {
 
                 public override string Draw() {
                     string result = base.Draw();
-                    result += string.Format("Batteries: {0}%", spaceship.power.baterries * 100.0f);
+                    result += string.Format("Batteries {0}\n", DrawTextProgressBar(spaceship.power.baterries));
                     return result;
                 }
             }
