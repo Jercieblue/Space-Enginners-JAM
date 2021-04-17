@@ -102,8 +102,6 @@ namespace IngameScript {
 
                 }
 
-                
-
                 public override string Draw() {
                     string result = base.Draw();
 
